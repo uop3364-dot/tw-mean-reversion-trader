@@ -26,6 +26,9 @@ data/account*.parquet
 data/open_orders*
 data/portfolio_snapshot*
 data/broker_session*
+# Deterministic corporate-action-adjusted derivatives; regenerate with
+# recover-research-data instead of versioning ~320 MB of duplicate OHLCV.
+data/analysis/
 KEYS.txt
 *credentials*
 *secrets*

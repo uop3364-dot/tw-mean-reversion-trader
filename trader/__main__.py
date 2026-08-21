@@ -16,6 +16,7 @@ from trader.data.official_daily_provider import OfficialDailyMarketProvider
 from trader.data.status_provider import dispositions,altered_daily
 from trader.data.readiness import research_readiness,ResearchDataNotReady
 from trader.data.audit import build_data_audit
+from trader.data.recovery import run_data_recovery
 from trader.data.finmind_provider import FinMindDataProvider,write_provenance
 from trader.data.historical_universe import twse_delisted,tpex_delisted
 from trader.data.catalog import build_catalog
@@ -170,11 +171,17 @@ def collect_shioaji(crosscheck_symbols:int=100,crosscheck_days:int=90):
 
 @app.command("research-readiness")
 def readiness():
-    r=research_readiness(ROOT);console.print(r.checks.to_string(index=False));console.print(f"dataset_version={r.dataset_version} dataset_hash={r.dataset_hash}");raise typer.Exit(0 if r.passed else 2)
+    r=research_readiness(ROOT);console.print(f"Dataset Grade: {r.grade}");console.print(r.checks[["check","status","coverage","required","unresolved_count","reason"]].to_string(index=False));console.print(f"dataset_version={r.dataset_version} dataset_hash={r.dataset_hash}");raise typer.Exit(0 if r.passed else 2)
 
 @app.command("data-audit")
 def data_audit_command():
-    result=build_data_audit(ROOT);r=research_readiness(ROOT);console.print(result);console.print(r.checks.to_string(index=False));raise typer.Exit(0 if r.passed else 2)
+    result=build_data_audit(ROOT);r=research_readiness(ROOT);console.print(result);console.print(f"Dataset Grade: {r.grade}");console.print(r.checks[["check","status","coverage","required","unresolved_count","reason"]].to_string(index=False));raise typer.Exit(0 if r.passed else 2)
+
+@app.command("recover-research-data")
+def recover_research_data(workers:int=6,official_daily:bool=typer.Option(True,"--official-daily/--retain-existing-daily")):
+    """Recover official research data and provenance; never runs strategy research."""
+    result=run_data_recovery(ROOT,workers,official_daily)
+    console.print(result)
 
 @app.command("build-research-audit")
 def research_audit(start:str="2019-01-01",allow_incomplete:bool=False):

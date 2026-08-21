@@ -1,0 +1,2 @@
+exchange,reason,automatically_fixable
+TWSE,OFFICIAL_ENDPOINT_BLOCKED:JSONDecodeError,True

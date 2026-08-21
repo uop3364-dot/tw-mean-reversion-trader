@@ -97,7 +97,7 @@ backtest:
   start_date: "2019-01-01"
   seed: 42
 research:
-  dataset_version: "tw_equity_daily_v2_20260821"
+  dataset_version: "tw_equity_daily_v3_20260821"
   warmup: ["2018-01-01", "2018-12-31"]
   development: ["2019-01-01", "2021-12-31"]
   validation: ["2022-01-01", "2023-12-31"]

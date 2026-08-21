@@ -1,0 +1,39 @@
+{
+  "dataset_version": "tw_equity_daily_v3_20260821",
+  "dataset_hash": "1850f2f1820742a51cc3e525599be78488659367cb00c84b5c99446ef5811343",
+  "dataset_grade": "GRADE_C_BLOCKED",
+  "security_master": {
+    "total": 2120,
+    "twse_common_stocks": 1147,
+    "tpex_common_stocks": 970,
+    "delisted_securities": 141
+  },
+  "coverage": {
+    "point_in_time_universe": 0.987631,
+    "ohlcv_symbol_days": 0.981368,
+    "provenance": 0.635670,
+    "delisted": 0.938640
+  },
+  "corporate_actions": {
+    "events": 5773,
+    "verified_rows": 5773,
+    "verified_ratio": 1.0,
+    "covered_exchanges": ["TPEx"],
+    "unresolved_exchange_ledgers": ["TWSE"]
+  },
+  "large_return_audit": {
+    "original_events": 264,
+    "verified_corporate_action": 119,
+    "verified_market_move": 34,
+    "data_error_replaced": 0,
+    "unresolved": 111
+  },
+  "off_calendar": {
+    "original_rows": 1279,
+    "calendar_sessions_added": 238,
+    "confirmed_provider_errors_removed": 1041,
+    "unresolved": 0
+  },
+  "ready_for_formal_research": false,
+  "external_blocker": "TWSE official endpoint security block prevented completion of official daily and corporate-action recovery."
+}

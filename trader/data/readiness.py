@@ -1,50 +1,237 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib,json
+import hashlib
+import json
+import platform
 import pandas as pd
 
-class ResearchDataNotReady(RuntimeError): pass
+
+class ResearchDataNotReady(RuntimeError):
+    pass
+
+
+GRADE_ORDER = {
+    "GRADE_C_BLOCKED": 0,
+    "GRADE_B_EXPLORATORY": 1,
+    "GRADE_A_FORMAL": 2,
+}
+
 
 @dataclass(frozen=True)
 class ResearchReadinessResult:
-    checks:pd.DataFrame; dataset_version:str; dataset_hash:str
+    checks: pd.DataFrame
+    dataset_version: str
+    dataset_hash: str
+    grade: str
+
     @property
-    def passed(self): return bool(not self.checks.empty and self.checks.passed.all())
-    def require(self):
-        if not self.passed: raise ResearchDataNotReady("RESEARCH_DATA_NOT_READY:"+",".join(self.checks.loc[~self.checks.passed,"check"]))
+    def passed(self):
+        return self.grade == "GRADE_A_FORMAL"
+
+    @property
+    def exploratory(self):
+        return GRADE_ORDER[self.grade] >= GRADE_ORDER["GRADE_B_EXPLORATORY"]
+
+    def require(self, minimum="GRADE_A_FORMAL"):
+        if GRADE_ORDER[self.grade] < GRADE_ORDER[minimum]:
+            failed = ",".join(self.checks.loc[self.checks.status.eq("FAIL"), "check"])
+            raise ResearchDataNotReady(f"RESEARCH_DATA_NOT_READY:{self.grade}:{failed}")
         return self
 
-def _hash(paths,extra=b""):
-    h=hashlib.sha256(extra)
-    for p in sorted(set(Path(x) for x in paths),key=lambda x:x.as_posix()):
-        h.update(p.as_posix().encode())
-        with p.open("rb") as f:
-            for block in iter(lambda:f.read(1048576),b""):h.update(block)
+
+def _hash(paths, extra=b""):
+    h = hashlib.sha256(extra)
+    for path in sorted(set(Path(x) for x in paths), key=lambda x: x.as_posix()):
+        h.update(path.as_posix().encode())
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1048576), b""):
+                h.update(block)
     return h.hexdigest()
 
-def research_readiness(root:Path,cfg=None):
+
+def research_readiness(root: Path, cfg=None):
     from trader.config import settings
-    cfg=cfg or settings();data=root/"data";out=root/"reports"/"data_audit";out.mkdir(parents=True,exist_ok=True);checks=[]
-    def add(name,ok,actual,required,reason):checks.append({"check":name,"passed":bool(ok),"actual":str(actual),"required":str(required),"reason":reason})
-    hp=data/"historical_universe.parquet";hist=pd.read_parquet(hp) if hp.exists() else pd.DataFrame();required={"symbol","exchange","listing_date","delisting_date","instrument_type"}
-    pit=required<=set(hist.columns) and hist.listing_date.notna().all();add("point_in_time_universe",pit,sorted(hist.columns),sorted(required),"authoritative listing/delisting/type for every security")
-    ordinary=not hist.empty and "instrument_type" in hist and hist.instrument_type.isin(["stock","ordinary_stock","common_stock"]).all();add("ordinary_stock_identity",ordinary,"verified" if ordinary else "missing","TWSE/TPEx ordinary stock only","product identity must be point-in-time")
-    dp=data/"delisted_universe.parquet";dl=pd.read_parquet(dp) if dp.exists() else pd.DataFrame();covered=not dl.empty and not hist.empty and set(dl.symbol.astype(str))<=set(hist.symbol.astype(str));add("delisted_coverage",covered,f"{len(dl)} delisted", "all delisted", "prevent survivorship bias")
-    tp=data/"processed"/"TAIEX.parquet";cal=pd.read_parquet(tp).date if tp.exists() else pd.Series(dtype="datetime64[ns]");idx=pd.DatetimeIndex(cal);add("trading_calendar",len(idx)>0 and idx.is_unique and idx.is_monotonic_increasing,len(idx),"unique ordered sessions","single timing source")
-    expected=set(pd.to_datetime(cal[cal>=pd.Timestamp("2019-01-01")]));missing={}
-    for ex in ("TWSE","TPEx"):
-        p=data/f"status_query_audit_{ex}.parquet";success=set()
-        if p.exists():
-            a=pd.read_parquet(p);success=set(pd.to_datetime(a.loc[a.success,"date"]))
-        missing[ex]=len(expected-success)
-    add("point_in_time_status",all(v==0 for v in missing.values()),missing,"zero missing sessions","tradability state per exchange session")
-    pp=data/"provenance.parquet";prov=pd.read_parquet(pp) if pp.exists() else pd.DataFrame();pc={"symbol","start_date","end_date","source","price_convention","download_timestamp","repair_reason","validation_result"};ready=set(hist.loc[hist.get("data_status",pd.Series(index=hist.index)).eq("READY"),"symbol"].astype(str)) if not hist.empty else set();ps=set(prov.symbol.astype(str)) if pc<=set(prov.columns) else set();add("ohlcv_provenance",pc<=set(prov.columns) and ready<=ps,f"{len(ps)}/{len(ready)}", "every symbol/range","secondary data cannot be unmarked")
-    conv=set(prov.price_convention.dropna()) if "price_convention" in prov else set();add("price_convention",conv=={"UNADJUSTED_EXCHANGE"},conv,"UNADJUSTED_EXCHANGE","no adjusted/unadjusted mix")
-    ap=data/"corporate_actions.parquet";actions=pd.read_parquet(ap) if ap.exists() else pd.DataFrame();ac={"symbol","date","event_type","adjustment_factor","source","verified"};complete=ac<=set(actions.columns) and not actions.empty and actions.verified.astype(bool).all();add("corporate_actions",complete,f"rows={len(actions)}","complete verified ledger","auditable adjustment layer")
-    lap=out/"corporate_action_audit.csv";large=pd.read_csv(lap) if lap.exists() else pd.DataFrame();largeok=not large.empty and "verified" in large and large.verified.astype(bool).all();add("large_return_audit",largeok,f"rows={len(large)}","all >25% moves verified","corporate action/data error audit")
-    invalid=duplicates=offcal=0
-    for p in (data/"processed").glob("*.parquet"):
-        d=pd.read_parquet(p);d["date"]=pd.to_datetime(d.date);bad=(d[["open","high","low","close"]]<=0).any(axis=1)|(d.volume<0)|(d.high<d.low)|(d.high<d[["open","close"]].max(axis=1))|(d.low>d[["open","close"]].min(axis=1));invalid+=int(bad.sum());duplicates+=int(d.date.duplicated().sum());offcal+=int((~d.date.isin(cal)).sum()) if len(cal) else len(d)
-    add("ohlcv_hard_checks",invalid==duplicates==offcal==0,{"invalid":invalid,"duplicates":duplicates,"off_calendar":offcal},"all zero","bar and calendar invariants")
-    version=cfg.get("research",{}).get("dataset_version","UNVERSIONED");paths=[p for p in [hp,dp,pp,ap,tp,root/"config"/"strategy.yaml"] if p.exists()]+list((data/"processed").glob("*.parquet"))+list(data.glob("*status*.parquet"))+list(data.glob("dispositions*.parquet"));dh=_hash(paths,json.dumps(cfg,sort_keys=True,default=str).encode());frame=pd.DataFrame(checks);frame.to_csv(out/"research_readiness.csv",index=False);(out/"readiness.json").write_text(json.dumps({"dataset_version":version,"dataset_hash":dh,"passed":bool(frame.passed.all()),"checks":frame.to_dict("records")},indent=2),encoding="utf-8");return ResearchReadinessResult(frame,version,dh)
+
+    cfg = cfg or settings()
+    data = root / "data"
+    out = root / "reports" / "data_audit"
+    out.mkdir(parents=True, exist_ok=True)
+    checks = []
+
+    def add(name, coverage, required, unresolved, reason, grade_a=None, grade_b=None):
+        a = bool(grade_a if grade_a is not None else coverage >= required)
+        b = bool(grade_b if grade_b is not None else coverage >= .98)
+        checks.append(
+            {
+                "check": name,
+                "status": "PASS" if a else ("EXPLORATORY" if b else "FAIL"),
+                "coverage": float(coverage),
+                "required": float(required),
+                "unresolved_count": int(unresolved),
+                "reason": reason,
+                "grade_a_pass": a,
+                "grade_b_pass": b,
+            }
+        )
+
+    master_path = data / "security_master.parquet"
+    master = pd.read_parquet(master_path) if master_path.exists() else pd.DataFrame()
+    required_master = {
+        "symbol", "company_name", "exchange", "instrument_type", "listing_date",
+        "delisting_date", "source", "source_record_id_or_url", "verified",
+    }
+    master_schema = required_master <= set(master.columns)
+    add(
+        "security_master",
+        1.0 if master_schema else 0.0,
+        .995,
+        0 if master_schema else len(required_master - set(master.columns)),
+        "official security identity and lifecycle schema",
+    )
+    relevant = master[
+        master.exchange.isin(["TWSE", "TPEx"])
+        & (master.delisting_date.isna() | master.delisting_date.gt(pd.Timestamp("2018-01-02")))
+    ] if not master.empty and "exchange" in master else pd.DataFrame()
+    identity_coverage = relevant.verified.mean() if not relevant.empty and "verified" in relevant else 0.0
+    add("ordinary_stock_identity", identity_coverage, .995, int((~relevant.verified).sum()) if not relevant.empty else 1, "verified instrument identity")
+
+    pit_path = data / "point_in_time_universe.parquet"
+    pit = pd.read_parquet(pit_path) if pit_path.exists() else pd.DataFrame()
+    pit_relevant = pit[
+        pit.delisting_date.isna() | pit.delisting_date.gt(pd.Timestamp("2018-01-02"))
+    ] if len(pit) else pit
+    pit_expected = len(pit_relevant)
+    pit_covered = int(pit_relevant.get("eligibility_verified", pd.Series(False, index=pit_relevant.index)).sum()) if len(pit_relevant) else 0
+    pit_coverage = pit_covered / pit_expected if pit_expected else 0.0
+    add("point_in_time_universe", pit_coverage, .995, pit_expected - pit_covered, "listing interval evidence without first_seen/date proxy")
+
+    delisted_path = out / "delisted_coverage.csv"
+    delisted = pd.read_csv(delisted_path) if delisted_path.exists() else pd.DataFrame()
+    if not delisted.empty:
+        relevant_delisted = (
+            delisted[pd.to_datetime(delisted.delisting_date).gt(pd.Timestamp("2018-01-02"))]
+            if "delisting_date" in delisted else delisted
+        )
+        expected = relevant_delisted.expected_sessions.sum()
+        covered = relevant_delisted.covered_sessions.sum()
+        delisted_coverage = covered / expected if expected else 0.0
+        unresolved_delisted = int((~relevant_delisted.included_in_research.astype(bool)).sum())
+    else:
+        delisted_coverage, unresolved_delisted = 0.0, 1
+    add("delisted_coverage", delisted_coverage, .995, unresolved_delisted, "delisted ordinary stocks and price history prevent survivorship bias")
+
+    ohlcv_path = out / "ohlcv_coverage.csv"
+    ohlcv = pd.read_csv(ohlcv_path) if ohlcv_path.exists() else pd.DataFrame()
+    expected = ohlcv.expected_sessions.sum() if not ohlcv.empty else 0
+    covered = ohlcv.covered_sessions.sum() if not ohlcv.empty else 0
+    ohlcv_coverage = covered / expected if expected else 0.0
+    add("ohlcv_symbol_days", ohlcv_coverage, .995, int(expected - covered), "required listed/tradable symbol-day OHLCV coverage")
+
+    provenance_path = data / "ohlcv_provenance.parquet"
+    provenance = pd.read_parquet(provenance_path) if provenance_path.exists() else pd.DataFrame()
+    required_symbols = set(pit.loc[pit.instrument_type.eq("COMMON_STOCK"), "symbol"].astype(str)) if not pit.empty else set()
+    verified_symbols = set(
+        provenance.loc[
+            provenance.verified.astype(bool) & provenance.source_type.ne("UNKNOWN"), "symbol"
+        ].astype(str)
+    ) if not provenance.empty else set()
+    provenance_coverage = len(required_symbols & verified_symbols) / len(required_symbols) if required_symbols else 0.0
+    add("ohlcv_provenance", provenance_coverage, .995, len(required_symbols - verified_symbols), "known source for each research symbol")
+    conventions = set(
+        provenance.loc[provenance.symbol.astype(str).isin(required_symbols), "price_convention"].dropna()
+    ) if not provenance.empty else set()
+    convention_ok = conventions == {"UNADJUSTED_EXCHANGE"}
+    add("price_convention", 1.0 if convention_ok else 0.0, 1.0, 0 if convention_ok else 1, "raw exchange trade price; adjusted analysis layer is separate")
+
+    actions_path = data / "corporate_actions.parquet"
+    actions = pd.read_parquet(actions_path) if actions_path.exists() else pd.DataFrame()
+    action_schema = {
+        "symbol", "exchange", "date", "event_type", "cash_amount", "stock_ratio",
+        "rights_ratio", "reference_price", "adjustment_factor", "source", "verified",
+    }
+    action_exchanges = set(actions.exchange) if not actions.empty and action_schema <= set(actions.columns) else set()
+    expected_action_exchanges = {"TWSE", "TPEx"}
+    row_coverage = actions.verified.mean() if not actions.empty and action_schema <= set(actions.columns) else 0.0
+    exchange_coverage = len(action_exchanges & expected_action_exchanges) / len(expected_action_exchanges)
+    verified_action_coverage = min(row_coverage, exchange_coverage)
+    unresolved_actions = int((~actions.verified.astype(bool)).sum()) + len(expected_action_exchanges - action_exchanges) if not actions.empty and "verified" in actions else len(expected_action_exchanges)
+    add("corporate_actions", verified_action_coverage, .995, unresolved_actions, "verified actions affecting continuous analysis price")
+
+    large_path = out / "large_return_audit.csv"
+    large = pd.read_csv(large_path) if large_path.exists() else pd.DataFrame()
+    unresolved_large = int(large.resolution.eq("UNRESOLVED").sum()) if not large.empty and "resolution" in large else 1
+    large_coverage = 1 - unresolved_large / len(large) if len(large) else 0.0
+    add("large_return_audit", large_coverage, 1.0, unresolved_large, "every abs(raw return)>25% has deterministic resolution")
+
+    off_path = out / "off_calendar_detail.csv"
+    off = pd.read_csv(off_path) if off_path.exists() else pd.DataFrame()
+    unresolved_off = int(off.resolution.eq("UNRESOLVED").sum()) if not off.empty and "resolution" in off else 1
+    add("off_calendar", 1.0 if unresolved_off == 0 else 0.0, 1.0, unresolved_off, "each original off-calendar bar is classified and resolved")
+
+    cal_path = data / "trading_calendar.parquet"
+    calendar = pd.read_parquet(cal_path).date if cal_path.exists() else pd.Series(dtype="datetime64[ns]")
+    calendar = pd.DatetimeIndex(pd.to_datetime(calendar)).normalize()
+    invalid = duplicates = remaining_off = 0
+    for path in (data / "processed").glob("*.parquet"):
+        bars = pd.read_parquet(path)
+        bars["date"] = pd.to_datetime(bars.date).dt.normalize()
+        bad = (
+            (bars[["open", "high", "low", "close"]] <= 0).any(axis=1)
+            | bars.volume.lt(0)
+            | bars.high.lt(bars.low)
+            | bars.high.lt(bars[["open", "close"]].max(axis=1))
+            | bars.low.gt(bars[["open", "close"]].min(axis=1))
+        )
+        invalid += int(bad.sum())
+        duplicates += int(bars.date.duplicated().sum())
+        remaining_off += int((~bars.date.isin(calendar)).sum()) if len(calendar) else len(bars)
+    hard_unresolved = invalid + duplicates + remaining_off
+    add("ohlcv_hard_checks", 1.0 if hard_unresolved == 0 else 0.0, 1.0, hard_unresolved, f"invalid={invalid}; duplicates={duplicates}; off_calendar={remaining_off}")
+
+    frame = pd.DataFrame(checks)
+    grade_a = bool(frame.grade_a_pass.all())
+    grade_b = bool(frame.grade_b_pass.all())
+    grade = "GRADE_A_FORMAL" if grade_a else ("GRADE_B_EXPLORATORY" if grade_b else "GRADE_C_BLOCKED")
+    version = cfg.get("research", {}).get("dataset_version", "UNVERSIONED")
+    paths = [
+        path for path in [
+            master_path, pit_path, provenance_path, actions_path, cal_path,
+            root / "config" / "strategy.yaml",
+        ] if path.exists()
+    ] + list((data / "processed").glob("*.parquet")) + list(data.glob("*status*.parquet"))
+    dataset_hash = _hash(paths, json.dumps(cfg, sort_keys=True, default=str).encode())
+    frame.to_csv(out / "research_readiness.csv", index=False)
+    payload = {
+        "dataset_grade": grade,
+        "dataset_version": version,
+        "dataset_hash": dataset_hash,
+        "python": platform.python_version(),
+        "checks": frame.to_dict("records"),
+    }
+    (out / "readiness.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    blockers = frame[~frame.grade_a_pass].copy()
+    blocker_rows = []
+    for priority, row in enumerate(blockers.itertuples(), 1):
+        blocker_rows.append(
+            {
+                "priority": priority,
+                "check": row.check,
+                "affected_symbols": row.unresolved_count if "symbol" in row.check or row.check in {"point_in_time_universe", "ohlcv_provenance", "delisted_coverage"} else "",
+                "affected_rows": row.unresolved_count,
+                "coverage": row.coverage,
+                "missing_requirement": row.required,
+                "recommended_source": "TWSE/TPEx official records",
+                "automatically_fixable": row.check not in {"point_in_time_universe", "delisted_coverage"},
+                "manual_action_required": row.check in {"point_in_time_universe", "delisted_coverage"},
+            }
+        )
+    pd.DataFrame(
+        blocker_rows,
+        columns=[
+            "priority", "check", "affected_symbols", "affected_rows", "coverage",
+            "missing_requirement", "recommended_source", "automatically_fixable",
+            "manual_action_required",
+        ],
+    ).to_csv(out / "blockers.csv", index=False)
+    return ResearchReadinessResult(frame, version, dataset_hash, grade)

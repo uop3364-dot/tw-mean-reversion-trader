@@ -19,7 +19,10 @@ def _get_json(url,retries=2):
 
 def fetch_twse(day:pd.Timestamp):
     ds=day.strftime("%Y%m%d");url=f"https://wwwc.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={ds}&type=ALLBUT0999&response=json"
-    j=_get_json(url);tables=j.get("tables",[]);table=max((t for t in tables if len(t.get("fields",[]))>=16),key=lambda t:len(t.get("data",[])),default={})
+    j=_get_json(url)
+    if j.get("date") not in (None, ds):
+        raise ValueError(f"TWSE_DATE_MISMATCH:{ds}:{j.get('date')}")
+    tables=j.get("tables",[]);table=max((t for t in tables if len(t.get("fields",[]))>=16),key=lambda t:len(t.get("data",[])),default={})
     rows=[]
     for x in table.get("data",[]):
         symbol=str(x[0]).strip()
@@ -28,7 +31,10 @@ def fetch_twse(day:pd.Timestamp):
 
 def fetch_tpex(day:pd.Timestamp):
     roc=day.year-1911;ds=f"{roc}/{day:%m/%d}";url=f"https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d={ds}&se=EW&o=json"
-    j=_get_json(url);tables=j.get("tables",[]);table=max((t for t in tables if len(t.get("fields",[]))>=15),key=lambda t:len(t.get("data",[])),default={})
+    j=_get_json(url)
+    if j.get("date") not in (None, day.strftime("%Y%m%d")):
+        raise ValueError(f"TPEX_DATE_MISMATCH:{day:%Y%m%d}:{j.get('date')}")
+    tables=j.get("tables",[]);table=max((t for t in tables if len(t.get("fields",[]))>=15),key=lambda t:len(t.get("data",[])),default={})
     rows=[]
     for x in table.get("data",[]):
         symbol=str(x[0]).strip()
@@ -44,29 +50,32 @@ class OfficialDailyMarketProvider:
             for saved_path in self.root.glob(f"{ex}_*.parquet"):
                 try:covered[ex]|={pd.Timestamp(x) for x in pd.read_parquet(saved_path,columns=["date"]).date.unique()}
                 except Exception:pass
-        for period in dates.to_period("W-FRI").unique():
-            period_dates=dates[dates.to_period("W-FRI")==period]
-            for exchange,fn in (("TWSE",fetch_twse),("TPEx",fetch_tpex)):
-                if exchange not in exchanges:continue
-                needed=pd.DatetimeIndex([d for d in period_dates if pd.Timestamp(d) not in covered[exchange]])
-                if needed.empty:continue
-                path=self.root/f"{exchange}_{needed.min():%Y%m%d}_{needed.max():%Y%m%d}.parquet"
-                rows=[]
-                if workers==1:
-                    for d in needed:
-                        try:rows.extend(fn(d))
-                        except Exception as exc:failures.append({"date":d,"exchange":exchange,"reason":repr(exc)})
-                        time.sleep(.25)
-                else:
-                    with ThreadPoolExecutor(max_workers=workers) as pool:
-                        futures={pool.submit(fn,d):d for d in needed}
-                        for future in as_completed(futures):
-                            try:rows.extend(future.result())
-                            except Exception as exc:failures.append({"date":futures[future],"exchange":exchange,"reason":repr(exc)})
-                frame=pd.DataFrame(rows,columns=["date","symbol","exchange","open","high","low","close","volume","turnover","source"]).sort_values(["date","symbol"])
-                if not frame.empty and set(pd.to_datetime(frame.date).dt.normalize())==set(needed):
-                    frame.to_parquet(path,index=False);created+=1
-                    if max_partitions and created>=max_partitions:return pd.DataFrame(failures)
+        groups={};tasks={}
+        for exchange,fn in (("TWSE",fetch_twse),("TPEx",fetch_tpex)):
+            if exchange not in exchanges:continue
+            needed=pd.DatetimeIndex([d for d in dates if pd.Timestamp(d) not in covered[exchange]])
+            for day in needed:
+                key=(exchange,day.to_period("M"));groups.setdefault(key,{"dates":set(),"rows":[],"done":0})
+                groups[key]["dates"].add(pd.Timestamp(day));tasks[(exchange,pd.Timestamp(day))]=fn
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures={pool.submit(fn,day):(exchange,day) for (exchange,day),fn in tasks.items()}
+            for future in as_completed(futures):
+                exchange,day=futures[future];key=(exchange,day.to_period("M"));group=groups[key]
+                try:
+                    result=future.result()
+                    if not result:failures.append({"date":day,"exchange":exchange,"reason":"EMPTY_OFFICIAL_SESSION"})
+                    else:group["rows"].extend(result)
+                except Exception as exc:failures.append({"date":day,"exchange":exchange,"reason":repr(exc)})
+                group["done"]+=1
+                if group["done"]==len(group["dates"]):
+                    frame=pd.DataFrame(group["rows"],columns=["date","symbol","exchange","open","high","low","close","volume","turnover","source"]).sort_values(["date","symbol"])
+                    actual=set(pd.to_datetime(frame.date).dt.normalize()) if not frame.empty else set()
+                    if actual==group["dates"]:
+                        path=self.root/f"{exchange}_{min(actual):%Y%m%d}_{max(actual):%Y%m%d}.parquet"
+                        frame.to_parquet(path,index=False);created+=1
+                        if max_partitions and created>=max_partitions:
+                            for pending in futures:pending.cancel()
+                            return pd.DataFrame(failures)
         return pd.DataFrame(failures)
     def consolidate(self,repository,required_dates=None,exchanges=("TWSE","TPEx")):
         """Validate and persist only the requested exchanges.

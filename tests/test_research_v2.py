@@ -21,7 +21,7 @@ def _universe():
 def test_no_future_universe():
     assert "HEALTHY" not in _universe().symbols_on("2019-12-31")
 def test_delisted_stock_inclusion():
-    assert "DELIST" in _universe().symbols_on("2024-01-03")
+    assert "DELIST" in _universe().symbols_on("2024-01-02")
 def test_listing_date_respected():
     assert not _universe().is_listed("HEALTHY","2019-12-31")
 def test_delisting_date_respected():

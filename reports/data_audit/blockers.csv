@@ -1,0 +1,7 @@
+priority,check,affected_symbols,affected_rows,coverage,missing_requirement,recommended_source,automatically_fixable,manual_action_required
+1,point_in_time_universe,26,26,0.9876308277830638,0.995,TWSE/TPEx official records,False,True
+2,delisted_coverage,26,26,0.9386401900412832,0.995,TWSE/TPEx official records,False,True
+3,ohlcv_symbol_days,69344,69344,0.9813675994958203,0.995,TWSE/TPEx official records,True,False
+4,ohlcv_provenance,764,764,0.6356700047687173,0.995,TWSE/TPEx official records,True,False
+5,corporate_actions,,1,0.5,0.995,TWSE/TPEx official records,True,False
+6,large_return_audit,,111,0.5795454545454546,1.0,TWSE/TPEx official records,True,False

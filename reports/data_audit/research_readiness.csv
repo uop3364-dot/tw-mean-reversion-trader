@@ -1,11 +1,12 @@
-check,passed,actual,required,reason
-point_in_time_universe,False,"['data_status', 'exchange', 'first_seen', 'last_seen', 'source', 'symbol', 'trading_days', 'universe_reason']","['delisting_date', 'exchange', 'instrument_type', 'listing_date', 'symbol']",authoritative listing/delisting/type for every security
-ordinary_stock_identity,False,missing,TWSE/TPEx ordinary stock only,product identity must be point-in-time
-delisted_coverage,False,125 delisted,all delisted,prevent survivorship bias
-trading_calendar,True,2095,unique ordered sessions,single timing source
-point_in_time_status,True,"{'TWSE': 0, 'TPEx': 0}",zero missing sessions,tradability state per exchange session
-ohlcv_provenance,False,0/2061,every symbol/range,secondary data cannot be unmarked
-price_convention,False,set(),UNADJUSTED_EXCHANGE,no adjusted/unadjusted mix
-corporate_actions,False,rows=0,complete verified ledger,auditable adjustment layer
-large_return_audit,False,rows=264,all >25% moves verified,corporate action/data error audit
-ohlcv_hard_checks,False,"{'invalid': 0, 'duplicates': 0, 'off_calendar': 1279}",all zero,bar and calendar invariants
+check,status,coverage,required,unresolved_count,reason,grade_a_pass,grade_b_pass
+security_master,PASS,1.0,0.995,0,official security identity and lifecycle schema,True,True
+ordinary_stock_identity,PASS,1.0,0.995,0,verified instrument identity,True,True
+point_in_time_universe,EXPLORATORY,0.9876308277830638,0.995,26,listing interval evidence without first_seen/date proxy,False,True
+delisted_coverage,FAIL,0.9386401900412832,0.995,26,delisted ordinary stocks and price history prevent survivorship bias,False,False
+ohlcv_symbol_days,EXPLORATORY,0.9813675994958203,0.995,69344,required listed/tradable symbol-day OHLCV coverage,False,True
+ohlcv_provenance,FAIL,0.6356700047687173,0.995,764,known source for each research symbol,False,False
+price_convention,PASS,1.0,1.0,0,raw exchange trade price; adjusted analysis layer is separate,True,True
+corporate_actions,FAIL,0.5,0.995,1,verified actions affecting continuous analysis price,False,False
+large_return_audit,FAIL,0.5795454545454546,1.0,111,every abs(raw return)>25% has deterministic resolution,False,False
+off_calendar,PASS,1.0,1.0,0,each original off-calendar bar is classified and resolved,True,True
+ohlcv_hard_checks,PASS,1.0,1.0,0,invalid=0; duplicates=0; off_calendar=0,True,True

@@ -1,77 +1,118 @@
 {
-  "dataset_version": "tw_equity_daily_v2_20260821",
-  "dataset_hash": "e9b2b45d21fa380a09576b2f9e922aefc7b1307ed707bcfe90794df93f8eff1d",
-  "passed": false,
+  "dataset_grade": "GRADE_C_BLOCKED",
+  "dataset_version": "tw_equity_daily_v3_20260821",
+  "dataset_hash": "1850f2f1820742a51cc3e525599be78488659367cb00c84b5c99446ef5811343",
+  "python": "3.12.14",
   "checks": [
     {
-      "check": "point_in_time_universe",
-      "passed": false,
-      "actual": "['data_status', 'exchange', 'first_seen', 'last_seen', 'source', 'symbol', 'trading_days', 'universe_reason']",
-      "required": "['delisting_date', 'exchange', 'instrument_type', 'listing_date', 'symbol']",
-      "reason": "authoritative listing/delisting/type for every security"
+      "check": "security_master",
+      "status": "PASS",
+      "coverage": 1.0,
+      "required": 0.995,
+      "unresolved_count": 0,
+      "reason": "official security identity and lifecycle schema",
+      "grade_a_pass": true,
+      "grade_b_pass": true
     },
     {
       "check": "ordinary_stock_identity",
-      "passed": false,
-      "actual": "missing",
-      "required": "TWSE/TPEx ordinary stock only",
-      "reason": "product identity must be point-in-time"
+      "status": "PASS",
+      "coverage": 1.0,
+      "required": 0.995,
+      "unresolved_count": 0,
+      "reason": "verified instrument identity",
+      "grade_a_pass": true,
+      "grade_b_pass": true
+    },
+    {
+      "check": "point_in_time_universe",
+      "status": "EXPLORATORY",
+      "coverage": 0.9876308277830638,
+      "required": 0.995,
+      "unresolved_count": 26,
+      "reason": "listing interval evidence without first_seen/date proxy",
+      "grade_a_pass": false,
+      "grade_b_pass": true
     },
     {
       "check": "delisted_coverage",
-      "passed": false,
-      "actual": "125 delisted",
-      "required": "all delisted",
-      "reason": "prevent survivorship bias"
+      "status": "FAIL",
+      "coverage": 0.9386401900412832,
+      "required": 0.995,
+      "unresolved_count": 26,
+      "reason": "delisted ordinary stocks and price history prevent survivorship bias",
+      "grade_a_pass": false,
+      "grade_b_pass": false
     },
     {
-      "check": "trading_calendar",
-      "passed": true,
-      "actual": "2095",
-      "required": "unique ordered sessions",
-      "reason": "single timing source"
-    },
-    {
-      "check": "point_in_time_status",
-      "passed": true,
-      "actual": "{'TWSE': 0, 'TPEx': 0}",
-      "required": "zero missing sessions",
-      "reason": "tradability state per exchange session"
+      "check": "ohlcv_symbol_days",
+      "status": "EXPLORATORY",
+      "coverage": 0.9813675994958203,
+      "required": 0.995,
+      "unresolved_count": 69344,
+      "reason": "required listed/tradable symbol-day OHLCV coverage",
+      "grade_a_pass": false,
+      "grade_b_pass": true
     },
     {
       "check": "ohlcv_provenance",
-      "passed": false,
-      "actual": "0/2061",
-      "required": "every symbol/range",
-      "reason": "secondary data cannot be unmarked"
+      "status": "FAIL",
+      "coverage": 0.6356700047687173,
+      "required": 0.995,
+      "unresolved_count": 764,
+      "reason": "known source for each research symbol",
+      "grade_a_pass": false,
+      "grade_b_pass": false
     },
     {
       "check": "price_convention",
-      "passed": false,
-      "actual": "set()",
-      "required": "UNADJUSTED_EXCHANGE",
-      "reason": "no adjusted/unadjusted mix"
+      "status": "PASS",
+      "coverage": 1.0,
+      "required": 1.0,
+      "unresolved_count": 0,
+      "reason": "raw exchange trade price; adjusted analysis layer is separate",
+      "grade_a_pass": true,
+      "grade_b_pass": true
     },
     {
       "check": "corporate_actions",
-      "passed": false,
-      "actual": "rows=0",
-      "required": "complete verified ledger",
-      "reason": "auditable adjustment layer"
+      "status": "FAIL",
+      "coverage": 0.5,
+      "required": 0.995,
+      "unresolved_count": 1,
+      "reason": "verified actions affecting continuous analysis price",
+      "grade_a_pass": false,
+      "grade_b_pass": false
     },
     {
       "check": "large_return_audit",
-      "passed": false,
-      "actual": "rows=264",
-      "required": "all >25% moves verified",
-      "reason": "corporate action/data error audit"
+      "status": "FAIL",
+      "coverage": 0.5795454545454546,
+      "required": 1.0,
+      "unresolved_count": 111,
+      "reason": "every abs(raw return)>25% has deterministic resolution",
+      "grade_a_pass": false,
+      "grade_b_pass": false
+    },
+    {
+      "check": "off_calendar",
+      "status": "PASS",
+      "coverage": 1.0,
+      "required": 1.0,
+      "unresolved_count": 0,
+      "reason": "each original off-calendar bar is classified and resolved",
+      "grade_a_pass": true,
+      "grade_b_pass": true
     },
     {
       "check": "ohlcv_hard_checks",
-      "passed": false,
-      "actual": "{'invalid': 0, 'duplicates': 0, 'off_calendar': 1279}",
-      "required": "all zero",
-      "reason": "bar and calendar invariants"
+      "status": "PASS",
+      "coverage": 1.0,
+      "required": 1.0,
+      "unresolved_count": 0,
+      "reason": "invalid=0; duplicates=0; off_calendar=0",
+      "grade_a_pass": true,
+      "grade_b_pass": true
     }
   ]
 }
