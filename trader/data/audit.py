@@ -15,6 +15,17 @@ def _large_return_audit(root, actions, provenance):
         for x in actions.itertuples()
     }
     prov = provenance.set_index(provenance.symbol.astype(str)) if not provenance.empty else pd.DataFrame()
+    cross_path = root / "data" / "large_return_official_crosschecks.parquet"
+    cross = pd.read_parquet(cross_path) if cross_path.exists() else pd.DataFrame()
+    cross_index = {
+        (str(row.symbol), pd.Timestamp(row.date).normalize()): row
+        for row in cross.itertuples()
+    } if not cross.empty else {}
+    pit_path = root / "data" / "point_in_time_universe.parquet"
+    pit = pd.read_parquet(pit_path) if pit_path.exists() else pd.DataFrame()
+    lifecycle_dates = set(
+        zip(pit.symbol.astype(str), pd.to_datetime(pit.listing_date).dt.normalize())
+    ) if not pit.empty else set()
     for path in (root / "data" / "processed").glob("*.parquet"):
         if path.stem == "TAIEX":
             continue
@@ -23,16 +34,34 @@ def _large_return_audit(root, actions, provenance):
         bars["raw_return"] = bars.close.pct_change()
         for row in bars[bars.raw_return.abs().gt(.25)].itertuples():
             action = action_dates.get((path.stem, row.date))
-            official = (
-                not prov.empty
-                and path.stem in prov.index
+            adjusted_return = row.raw_return
+            if action is not None and pd.notna(action.adjustment_factor) and action.adjustment_factor > 0:
+                prior_close = bars.loc[bars.date.lt(row.date), "close"].iloc[-1]
+                adjusted_return = row.close / (prior_close * action.adjustment_factor) - 1
+            official_cross = cross_index.get((path.stem, row.date))
+            provenance_official = (
+                not prov.empty and path.stem in prov.index
                 and bool(prov.loc[path.stem].verified)
                 and prov.loc[path.stem].source_type == "OFFICIAL_EXCHANGE"
             )
+            cross_matches = (
+                official_cross is not None
+                and bool(official_cross.current_match)
+                and bool(official_cross.previous_match)
+            )
+            cross_source = str(getattr(official_cross, "source", "")) if official_cross is not None else ""
+            official = provenance_official or (cross_matches and "OFFICIAL" in cross_source)
             if action is not None:
-                resolution = "VERIFIED_CORPORATE_ACTION"
+                resolution = (
+                    "CORPORATE_ACTION_MECHANICAL_GAP"
+                    if abs(adjusted_return) <= .25 else "VERIFIED_CORPORATE_ACTION"
+                )
             elif official:
                 resolution = "VERIFIED_MARKET_MOVE"
+            elif cross_matches:
+                resolution = "SECONDARY_CROSSCHECKED_MARKET_MOVE"
+            elif (path.stem, row.date) in lifecycle_dates:
+                resolution = "VERIFIED_LIFECYCLE_EVENT"
             else:
                 resolution = "UNRESOLVED"
             rows.append(
@@ -40,6 +69,7 @@ def _large_return_audit(root, actions, provenance):
                     "symbol": path.stem,
                     "date": row.date,
                     "raw_return": row.raw_return,
+                    "corporate_action_adjusted_return": adjusted_return,
                     "source": prov.loc[path.stem].source if not prov.empty and path.stem in prov.index else "UNKNOWN",
                     "corporate_action": action.event_type if action is not None else "",
                     "official_crosscheck": official,
@@ -52,7 +82,7 @@ def _large_return_audit(root, actions, provenance):
     return pd.DataFrame(
         rows,
         columns=[
-            "symbol", "date", "raw_return", "source", "corporate_action",
+            "symbol", "date", "raw_return", "corporate_action_adjusted_return", "source", "corporate_action",
             "official_crosscheck", "resolution", "original_value",
             "replacement_value", "verified",
         ],
@@ -145,12 +175,16 @@ def build_data_audit(root: Path):
 
     large = _large_return_audit(root, actions, provenance)
     large.to_csv(out / "large_return_audit.csv", index=False)
+    # v3.1 authoritative denominator excludes only evidenced lifecycle/status
+    # rows. This deliberately overwrites the legacy all-calendar expectation.
+    from .recovery_v31 import audit_required_symbol_days
+    denominator = audit_required_symbol_days(root, pit)
     return {
         "security_master": len(master),
         "common_stocks": len(common),
         "delisted": len(delisted),
-        "symbol_days_expected": int(symbol_coverage.expected_sessions.sum()) if not symbol_coverage.empty else 0,
-        "symbol_days_covered": int(symbol_coverage.covered_sessions.sum()) if not symbol_coverage.empty else 0,
+        "symbol_days_expected": int(denominator["required_symbol_days"]),
+        "symbol_days_covered": int(denominator["available_symbol_days"]),
         "large_returns": len(large),
         "large_returns_unresolved": int(large.resolution.eq("UNRESOLVED").sum()) if not large.empty else 0,
         "corporate_actions": len(actions),

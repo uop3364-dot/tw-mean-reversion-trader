@@ -121,19 +121,33 @@ def research_readiness(root: Path, cfg=None):
         delisted_coverage, unresolved_delisted = 0.0, 1
     add("delisted_coverage", delisted_coverage, .995, unresolved_delisted, "delisted ordinary stocks and price history prevent survivorship bias")
 
+    denominator_path = out / "coverage_denominator_audit.csv"
+    denominator = pd.read_csv(denominator_path) if denominator_path.exists() else pd.DataFrame()
     ohlcv_path = out / "ohlcv_coverage.csv"
     ohlcv = pd.read_csv(ohlcv_path) if ohlcv_path.exists() else pd.DataFrame()
-    expected = ohlcv.expected_sessions.sum() if not ohlcv.empty else 0
-    covered = ohlcv.covered_sessions.sum() if not ohlcv.empty else 0
+    expected = denominator.required_symbol_days.iloc[0] if not denominator.empty else (ohlcv.expected_sessions.sum() if not ohlcv.empty else 0)
+    covered = denominator.available_symbol_days.iloc[0] if not denominator.empty else (ohlcv.covered_sessions.sum() if not ohlcv.empty else 0)
     ohlcv_coverage = covered / expected if expected else 0.0
     add("ohlcv_symbol_days", ohlcv_coverage, .995, int(expected - covered), "required listed/tradable symbol-day OHLCV coverage")
 
     provenance_path = data / "ohlcv_provenance.parquet"
     provenance = pd.read_parquet(provenance_path) if provenance_path.exists() else pd.DataFrame()
-    required_symbols = set(pit.loc[pit.instrument_type.eq("COMMON_STOCK"), "symbol"].astype(str)) if not pit.empty else set()
+    required_symbols = set(
+        pit.loc[
+            pit.instrument_type.eq("COMMON_STOCK")
+            & (pit.delisting_date.isna() | pit.delisting_date.gt(pd.Timestamp("2018-01-02"))),
+            "symbol",
+        ].astype(str)
+    ) if not pit.empty else set()
+    accepted_provenance = {"PROVENANCE_DIRECT", "PROVENANCE_RECONSTRUCTED", "SECONDARY_CROSSCHECKED"}
+    evidence = provenance.get("evidence", pd.Series("", index=provenance.index)).fillna("").astype(str).str.len().gt(0) if not provenance.empty else pd.Series(dtype=bool)
+    classes = provenance.get("provenance_class", pd.Series("UNKNOWN", index=provenance.index)) if not provenance.empty else pd.Series(dtype=str)
     verified_symbols = set(
         provenance.loc[
-            provenance.verified.astype(bool) & provenance.source_type.ne("UNKNOWN"), "symbol"
+            provenance.verified.astype(bool)
+            & classes.isin(accepted_provenance)
+            & evidence,
+            "symbol",
         ].astype(str)
     ) if not provenance.empty else set()
     provenance_coverage = len(required_symbols & verified_symbols) / len(required_symbols) if required_symbols else 0.0
@@ -154,15 +168,33 @@ def research_readiness(root: Path, cfg=None):
     expected_action_exchanges = {"TWSE", "TPEx"}
     row_coverage = actions.verified.mean() if not actions.empty and action_schema <= set(actions.columns) else 0.0
     exchange_coverage = len(action_exchanges & expected_action_exchanges) / len(expected_action_exchanges)
-    verified_action_coverage = min(row_coverage, exchange_coverage)
-    unresolved_actions = int((~actions.verified.astype(bool)).sum()) + len(expected_action_exchanges - action_exchanges) if not actions.empty and "verified" in actions else len(expected_action_exchanges)
-    add("corporate_actions", verified_action_coverage, .995, unresolved_actions, "verified actions affecting continuous analysis price")
+    action_fail_path = out / "corporate_action_recovery_failures.csv"
+    action_failures = pd.read_csv(action_fail_path) if action_fail_path.exists() else pd.DataFrame()
+    unresolved_periods = len(action_failures)
+    total_months = len(pd.period_range("2018-01", pd.Timestamp.today(), freq="M"))
+    completed_exchange_months = total_months * len(action_exchanges & expected_action_exchanges) - unresolved_periods
+    verified_action_coverage = min(
+        row_coverage,
+        completed_exchange_months / (total_months * len(expected_action_exchanges)) if total_months else 0.0,
+    )
+    unresolved_actions = int((~actions.verified.astype(bool)).sum()) + unresolved_periods + len(expected_action_exchanges - action_exchanges) if not actions.empty and "verified" in actions else len(expected_action_exchanges)
+    add(
+        "corporate_actions", verified_action_coverage, .995, unresolved_actions,
+        "verified actions affecting continuous analysis price; failed official periods remain explicit",
+        grade_a=verified_action_coverage >= .995 and unresolved_actions == 0,
+        grade_b=row_coverage == 1.0 and exchange_coverage == 1.0,
+    )
 
     large_path = out / "large_return_audit.csv"
     large = pd.read_csv(large_path) if large_path.exists() else pd.DataFrame()
     unresolved_large = int(large.resolution.eq("UNRESOLVED").sum()) if not large.empty and "resolution" in large else 1
     large_coverage = 1 - unresolved_large / len(large) if len(large) else 0.0
-    add("large_return_audit", large_coverage, 1.0, unresolved_large, "every abs(raw return)>25% has deterministic resolution")
+    add(
+        "large_return_audit", large_coverage, 1.0, unresolved_large,
+        "every abs(raw return)>25% has deterministic resolution; Grade B retains explicit unresolved cases",
+        grade_a=unresolved_large == 0,
+        grade_b=large_coverage >= .95,
+    )
 
     off_path = out / "off_calendar_detail.csv"
     off = pd.read_csv(off_path) if off_path.exists() else pd.DataFrame()

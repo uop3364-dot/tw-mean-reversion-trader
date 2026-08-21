@@ -1,0 +1,32 @@
+{
+  "dataset_version": "tw_equity_daily_v3_1_20260821",
+  "dataset_hash": "b7d8eff82b6838ea2f3f64a5a2b2270f64a6712dec19da76a19209048e7954cb",
+  "dataset_grade": "GRADE_B_EXPLORATORY",
+  "lifecycle_original": 26,
+  "lifecycle_unresolved": 1,
+  "delisted_coverage": 0.9822700051869666,
+  "ohlcv_original_gap_count": 69344,
+  "ohlcv_true_missing": 29486,
+  "ohlcv_coverage": 0.9920394942165789,
+  "provenance_original_gap_count": 764,
+  "provenance_unresolved": 1,
+  "provenance_coverage": 0.99951992318771,
+  "twse_corporate_actions": 3205,
+  "total_corporate_actions": 8978,
+  "corporate_action_unresolved_periods": 58,
+  "large_return_original_unresolved": 111,
+  "large_return_unresolved": 9,
+  "off_calendar_unresolved": 0,
+  "required_denominator": {
+    "raw_possible_rows": 4445700.0,
+    "excluded_pre_listing": 564090.0,
+    "excluded_post_delisting": 174159.0,
+    "excluded_non_sessions": 0.0,
+    "excluded_suspended": 3781.0,
+    "excluded_no_trade": 37319.0,
+    "required_symbol_days": 3704036.0,
+    "available_symbol_days": 3674550.0,
+    "coverage": 0.9920394942165788
+  },
+  "ready_for_formal_research": false
+}

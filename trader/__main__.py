@@ -17,6 +17,7 @@ from trader.data.status_provider import dispositions,altered_daily
 from trader.data.readiness import research_readiness,ResearchDataNotReady
 from trader.data.audit import build_data_audit
 from trader.data.recovery import run_data_recovery
+from trader.data.recovery_v31 import run_recovery_v31
 from trader.data.finmind_provider import FinMindDataProvider,write_provenance
 from trader.data.historical_universe import twse_delisted,tpex_delisted
 from trader.data.catalog import build_catalog
@@ -180,7 +181,7 @@ def data_audit_command():
 @app.command("recover-research-data")
 def recover_research_data(workers:int=6,official_daily:bool=typer.Option(True,"--official-daily/--retain-existing-daily")):
     """Recover official research data and provenance; never runs strategy research."""
-    result=run_data_recovery(ROOT,workers,official_daily)
+    result=run_recovery_v31(ROOT)
     console.print(result)
 
 @app.command("build-research-audit")

@@ -1,7 +1,7 @@
 {
-  "dataset_grade": "GRADE_C_BLOCKED",
-  "dataset_version": "tw_equity_daily_v3_20260821",
-  "dataset_hash": "1850f2f1820742a51cc3e525599be78488659367cb00c84b5c99446ef5811343",
+  "dataset_grade": "GRADE_B_EXPLORATORY",
+  "dataset_version": "tw_equity_daily_v3_1_20260821",
+  "dataset_hash": "b7d8eff82b6838ea2f3f64a5a2b2270f64a6712dec19da76a19209048e7954cb",
   "python": "3.12.14",
   "checks": [
     {
@@ -26,43 +26,43 @@
     },
     {
       "check": "point_in_time_universe",
-      "status": "EXPLORATORY",
-      "coverage": 0.9876308277830638,
+      "status": "PASS",
+      "coverage": 0.9995242626070409,
       "required": 0.995,
-      "unresolved_count": 26,
+      "unresolved_count": 1,
       "reason": "listing interval evidence without first_seen/date proxy",
-      "grade_a_pass": false,
+      "grade_a_pass": true,
       "grade_b_pass": true
     },
     {
       "check": "delisted_coverage",
-      "status": "FAIL",
-      "coverage": 0.9386401900412832,
+      "status": "EXPLORATORY",
+      "coverage": 0.9822700051869666,
       "required": 0.995,
-      "unresolved_count": 26,
+      "unresolved_count": 1,
       "reason": "delisted ordinary stocks and price history prevent survivorship bias",
       "grade_a_pass": false,
-      "grade_b_pass": false
+      "grade_b_pass": true
     },
     {
       "check": "ohlcv_symbol_days",
       "status": "EXPLORATORY",
-      "coverage": 0.9813675994958203,
+      "coverage": 0.9920394942165789,
       "required": 0.995,
-      "unresolved_count": 69344,
+      "unresolved_count": 29486,
       "reason": "required listed/tradable symbol-day OHLCV coverage",
       "grade_a_pass": false,
       "grade_b_pass": true
     },
     {
       "check": "ohlcv_provenance",
-      "status": "FAIL",
-      "coverage": 0.6356700047687173,
+      "status": "PASS",
+      "coverage": 0.99951992318771,
       "required": 0.995,
-      "unresolved_count": 764,
+      "unresolved_count": 1,
       "reason": "known source for each research symbol",
-      "grade_a_pass": false,
-      "grade_b_pass": false
+      "grade_a_pass": true,
+      "grade_b_pass": true
     },
     {
       "check": "price_convention",
@@ -76,23 +76,23 @@
     },
     {
       "check": "corporate_actions",
-      "status": "FAIL",
-      "coverage": 0.5,
+      "status": "EXPLORATORY",
+      "coverage": 0.7211538461538461,
       "required": 0.995,
-      "unresolved_count": 1,
-      "reason": "verified actions affecting continuous analysis price",
+      "unresolved_count": 58,
+      "reason": "verified actions affecting continuous analysis price; failed official periods remain explicit",
       "grade_a_pass": false,
-      "grade_b_pass": false
+      "grade_b_pass": true
     },
     {
       "check": "large_return_audit",
-      "status": "FAIL",
-      "coverage": 0.5795454545454546,
+      "status": "EXPLORATORY",
+      "coverage": 0.9659090909090909,
       "required": 1.0,
-      "unresolved_count": 111,
-      "reason": "every abs(raw return)>25% has deterministic resolution",
+      "unresolved_count": 9,
+      "reason": "every abs(raw return)>25% has deterministic resolution; Grade B retains explicit unresolved cases",
       "grade_a_pass": false,
-      "grade_b_pass": false
+      "grade_b_pass": true
     },
     {
       "check": "off_calendar",

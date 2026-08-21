@@ -1,0 +1,2 @@
+universe_excluded_if_dropped_pct,symbol_days_excluded_if_dropped_pct,affected_symbols,delisted_or_distressed_records,concentrated_in_delisted_or_distressed,survivorship_bias_if_excluded,directional_bias_for_mean_reversion_strategy,recommendation
+0.9827172347575612,0.00796050578342111,2047,111,True,True,UPWARD_BIAS_RISK: missing data includes suspended/delisted/falling-knife securities,DO_NOT_EXCLUDE; keep formal Grade A blocked

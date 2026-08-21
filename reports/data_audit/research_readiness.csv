@@ -1,12 +1,12 @@
 check,status,coverage,required,unresolved_count,reason,grade_a_pass,grade_b_pass
 security_master,PASS,1.0,0.995,0,official security identity and lifecycle schema,True,True
 ordinary_stock_identity,PASS,1.0,0.995,0,verified instrument identity,True,True
-point_in_time_universe,EXPLORATORY,0.9876308277830638,0.995,26,listing interval evidence without first_seen/date proxy,False,True
-delisted_coverage,FAIL,0.9386401900412832,0.995,26,delisted ordinary stocks and price history prevent survivorship bias,False,False
-ohlcv_symbol_days,EXPLORATORY,0.9813675994958203,0.995,69344,required listed/tradable symbol-day OHLCV coverage,False,True
-ohlcv_provenance,FAIL,0.6356700047687173,0.995,764,known source for each research symbol,False,False
+point_in_time_universe,PASS,0.9995242626070409,0.995,1,listing interval evidence without first_seen/date proxy,True,True
+delisted_coverage,EXPLORATORY,0.9822700051869666,0.995,1,delisted ordinary stocks and price history prevent survivorship bias,False,True
+ohlcv_symbol_days,EXPLORATORY,0.9920394942165789,0.995,29486,required listed/tradable symbol-day OHLCV coverage,False,True
+ohlcv_provenance,PASS,0.99951992318771,0.995,1,known source for each research symbol,True,True
 price_convention,PASS,1.0,1.0,0,raw exchange trade price; adjusted analysis layer is separate,True,True
-corporate_actions,FAIL,0.5,0.995,1,verified actions affecting continuous analysis price,False,False
-large_return_audit,FAIL,0.5795454545454546,1.0,111,every abs(raw return)>25% has deterministic resolution,False,False
+corporate_actions,EXPLORATORY,0.7211538461538461,0.995,58,verified actions affecting continuous analysis price; failed official periods remain explicit,False,True
+large_return_audit,EXPLORATORY,0.9659090909090909,1.0,9,every abs(raw return)>25% has deterministic resolution; Grade B retains explicit unresolved cases,False,True
 off_calendar,PASS,1.0,1.0,0,each original off-calendar bar is classified and resolved,True,True
 ohlcv_hard_checks,PASS,1.0,1.0,0,invalid=0; duplicates=0; off_calendar=0,True,True

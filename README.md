@@ -2,18 +2,25 @@
 
 ## Research status
 
-**NOT YET VALIDATED — GRADE_C_BLOCKED (Research Data Recovery v3, 2026-08-21).**
+**NOT YET VALIDATED — GRADE_B_EXPLORATORY (Research Data Recovery v3.1, 2026-08-21).**
 
 Pre-audit results are retained under `reports/legacy/` and explicitly marked
 `LEGACY_INVALID_OR_UNVALIDATED`. They are not evidence of performance.
 
 One authoritative readiness gate protects every formal research command. The
-v3 recovery resolved every original off-calendar row, established an official
-security master, separated raw trade prices from adjusted analysis prices, and
-recovered 5,773 verified TPEx corporate actions. Formal research remains
-blocked: TWSE imposed an endpoint security block before full official OHLCV and
-action recovery completed. Remaining gaps are explicit in
-`reports/data_audit/blockers.csv`; final OOS remains unavailable.
+v3.1 resolved every original off-calendar row, repaired 25 of 26 lifecycle
+gaps, established auditable research-required symbol-day masks, separated raw
+trade prices from adjusted analysis prices, and recovered 8,978 verified
+corporate-action rows across both exchanges. It also removed 2,638 provider
+forward-fill rows only where official exchange tables proved no quote existed.
+
+Formal research remains blocked. Required OHLCV coverage is 99.20%, delisted
+coverage is 98.23%, 58 TWSE corporate-action months remain unavailable after
+the official endpoint security block, and 9 large-return events remain
+unresolved. Detailed source attempts and bias risks are in
+`reports/data_audit/final_remaining_blockers.csv`. Grade B permits exploratory
+data work only; the Grade A hard gate continues to reject formal backtest,
+walk-forward, optimization, and final OOS.
 
 ## Install and test
 
