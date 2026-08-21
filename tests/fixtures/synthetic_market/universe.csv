@@ -1,0 +1,5 @@
+symbol,exchange,listing_date,delisting_date,instrument_type
+HEALTHY,TWSE,2020-01-01,,ordinary_stock
+KNIFE,TPEx,2020-01-01,,ordinary_stock
+DELIST,TWSE,2020-01-01,2024-01-03,ordinary_stock
+0050,TWSE,2003-06-25,,ETF

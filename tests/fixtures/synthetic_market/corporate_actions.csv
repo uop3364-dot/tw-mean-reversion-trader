@@ -1,0 +1,2 @@
+symbol,date,event_type,adjustment_factor,source,verified
+HEALTHY,2024-01-03,split,0.5,SYNTHETIC,true

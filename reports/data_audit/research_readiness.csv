@@ -1,0 +1,11 @@
+check,passed,actual,required,reason
+point_in_time_universe,False,"['data_status', 'exchange', 'first_seen', 'last_seen', 'source', 'symbol', 'trading_days', 'universe_reason']","['delisting_date', 'exchange', 'instrument_type', 'listing_date', 'symbol']",authoritative listing/delisting/type for every security
+ordinary_stock_identity,False,missing,TWSE/TPEx ordinary stock only,product identity must be point-in-time
+delisted_coverage,False,125 delisted,all delisted,prevent survivorship bias
+trading_calendar,True,2095,unique ordered sessions,single timing source
+point_in_time_status,True,"{'TWSE': 0, 'TPEx': 0}",zero missing sessions,tradability state per exchange session
+ohlcv_provenance,False,0/2061,every symbol/range,secondary data cannot be unmarked
+price_convention,False,set(),UNADJUSTED_EXCHANGE,no adjusted/unadjusted mix
+corporate_actions,False,rows=0,complete verified ledger,auditable adjustment layer
+large_return_audit,False,rows=264,all >25% moves verified,corporate action/data error audit
+ohlcv_hard_checks,False,"{'invalid': 0, 'duplicates': 0, 'off_calendar': 1279}",all zero,bar and calendar invariants

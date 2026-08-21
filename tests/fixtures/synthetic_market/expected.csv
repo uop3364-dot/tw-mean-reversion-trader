@@ -1,0 +1,5 @@
+case,signal_day,earliest_execution,expected_reason
+tp_gap,2024-01-02,2024-01-03,TAKE_PROFIT
+thesis_break,2024-01-03,2024-01-04,THESIS_BREAK
+time_exit,2024-01-03,2024-01-04,TIME_EXIT
+delisted,2024-01-03,,NOT_LISTED

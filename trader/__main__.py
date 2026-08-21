@@ -14,7 +14,8 @@ from trader.data.universe_provider import OfficialUniverseProvider
 from trader.data.quality import quality_manifest
 from trader.data.official_daily_provider import OfficialDailyMarketProvider
 from trader.data.status_provider import dispositions,altered_daily
-from trader.data.readiness import research_readiness
+from trader.data.readiness import research_readiness,ResearchDataNotReady
+from trader.data.audit import build_data_audit
 from trader.data.finmind_provider import FinMindDataProvider,write_provenance
 from trader.data.historical_universe import twse_delisted,tpex_delisted
 from trader.data.catalog import build_catalog
@@ -22,8 +23,12 @@ from trader.data.shioaji_research import ShioajiResearchClient,compare_bars
 from trader.reporting.research_audit import build_research_audit
 from trader.strategy.signal_engine import build_signals
 from trader.backtest.engine import BacktestEngine
-from trader.backtest.sensitivity import sensitivity
 from trader.backtest.walk_forward import walk_forward
+from trader.research.optimization import optimize_grid
+from trader.research.ablation import run_ablation
+from trader.research.manifest import write_manifest,config_hash,git_commit
+from trader.research.statistics import bootstrap_trades,monte_carlo
+from trader.research.verdict import evaluate
 from trader.reporting.csv_report import write_csvs
 from trader.reporting.html_report import write_html
 
@@ -37,15 +42,15 @@ def _data():
         return {s:repo.load(s) for s in symbols if (repo.root/f"{s}.parquet").exists()}
     return {s:repo.load(s) for s in repo.symbols()}
 def _feature_cache():
-    cache=ROOT/"data"/"feature_cache";catalog=ROOT/"data"/"historical_universe.parquet"
-    if not cache.exists() or not catalog.exists():return None
-    h=pd.read_parquet(catalog);symbols=h.loc[h.data_status=="READY","symbol"].astype(str)
-    prepared={}
-    for symbol in symbols:
-        path=cache/f"{symbol}.parquet"
-        if not path.exists():return None
-        prepared[symbol]=pd.read_parquet(path).set_index("date")
-    return prepared
+    # Pre-v2 cache has no dataset/config key and is intentionally invalid.
+    return None
+def _require_ready():
+    result=research_readiness(ROOT)
+    if not result.passed:
+        failed=",".join(result.checks.loc[~result.checks.passed,"check"])
+        console.print(f"[red]RESEARCH_DATA_NOT_READY[/]: {failed}")
+        raise typer.Exit(2)
+    return result
 def _status():
     out={"altered":set(),"dispositions":{}}
     paths=[ROOT/"data"/"altered_trading_daily.parquet"] if (ROOT/"data"/"altered_trading_daily.parquet").exists() else list((ROOT/"data").glob("altered_trading_daily_T*.parquet"))
@@ -165,12 +170,16 @@ def collect_shioaji(crosscheck_symbols:int=100,crosscheck_days:int=90):
 
 @app.command("research-readiness")
 def readiness():
-    r=research_readiness(ROOT);console.print(r.to_string(index=False));raise typer.Exit(0 if r.passed.all() else 2)
+    r=research_readiness(ROOT);console.print(r.checks.to_string(index=False));console.print(f"dataset_version={r.dataset_version} dataset_hash={r.dataset_hash}");raise typer.Exit(0 if r.passed else 2)
+
+@app.command("data-audit")
+def data_audit_command():
+    result=build_data_audit(ROOT);r=research_readiness(ROOT);console.print(result);console.print(r.checks.to_string(index=False));raise typer.Exit(0 if r.passed else 2)
 
 @app.command("build-research-audit")
 def research_audit(start:str="2019-01-01",allow_incomplete:bool=False):
     ready=research_readiness(ROOT)
-    if not ready.passed.all() and not allow_incomplete:raise typer.BadParameter("Research data incomplete; audit build refused")
+    if not ready.passed and not allow_incomplete:raise typer.BadParameter("RESEARCH_DATA_NOT_READY: audit build refused")
     funnel=build_research_audit(_data(),settings(),ROOT/"reports",_status(),start);console.print(funnel)
 
 @app.command("download-official-daily")
@@ -234,34 +243,47 @@ def scan(date_:str|None=typer.Option(None,"--date")):
     console.print(table);pd.DataFrame(rows).to_csv(ROOT/"reports"/"candidates.csv",index=False);event("scan",date=date_,candidates=len(rows))
 
 @app.command()
-def backtest(start:str|None=None,end:str|None=None,capital:float|None=None,analysis:bool=typer.Option(True,"--analysis/--no-analysis"),run_walk_forward:bool=typer.Option(True,"--walk-forward/--no-walk-forward"),allow_incomplete:bool=False):
-    cfg=settings();ready=research_readiness(ROOT)
-    if not ready.passed.all() and not allow_incomplete:raise typer.BadParameter("Research data is incomplete; see reports/research_readiness.csv. Use --allow-incomplete only for diagnostics, never for a valid result.")
-    data=_data()
-    if not data:raise typer.BadParameter("No data. Run: python -m trader download-data")
-    status=_status();result=BacktestEngine(data,cfg,capital,prepared=_feature_cache(),status=status).run(start or cfg["backtest"]["start_date"],end)
-    sens=sensitivity(data,cfg,start,end,status,_feature_cache(),ROOT/"reports"/"sensitivity.csv") if analysis else pd.DataFrame();write_csvs(result,ROOT/"reports",sens);write_html(result,ROOT/"reports"/"backtest.html",sens)
-    wf=walk_forward(data,cfg,start or cfg["backtest"]["start_date"],end,status,_feature_cache()) if run_walk_forward else pd.DataFrame();wf.to_csv(ROOT/"reports"/"walk_forward.csv",index=False)
-    for k,v in result["metrics"].items():console.print(f"{k}: {v}")
-    console.print(f"Trades: {len(result['trades'])}; walk-forward windows: {len(wf)}; sensitivity rows: {len(sens)}")
+def backtest(capital:float|None=None):
+    cfg=settings();ready=_require_ready();data=_data();status=_status()
+    for name in ("development","validation"):
+        start,end=cfg["research"][name];out=ROOT/"reports"/name
+        for scenario in ("OPTIMISTIC","BASE","CONSERVATIVE"):
+            result=BacktestEngine(data,cfg,capital,status=status).run(start,end,None,True,scenario,False);target=out/scenario.lower();write_csvs(result,target);pd.DataFrame([result["metrics"]]).to_csv(target/"metrics.csv",index=False)
+            if scenario=="BASE":write_html(result,out/"backtest.html")
+        write_manifest(out/"run_manifest.json",ready,cfg,[start,end],"NEXT_DAY_OPEN",name)
+    console.print("Development and validation completed; final OOS was not touched")
 
 @app.command()
 def optimize(start:str|None=None,end:str|None=None):
-    cfg=settings();path=ROOT/"reports"/"sensitivity.csv";out=sensitivity(_data(),cfg,start,end,_status(),_feature_cache(),path);out.to_csv(path,index=False);console.print(f"Wrote {len(out)} combinations")
+    cfg=settings();_require_ready();period=cfg["research"]["development"];out=optimize_grid(_data(),cfg,start or period[0],end or period[1],_status(),None,cfg["research"]["minimum_training_trades"]);path=ROOT/"reports"/"development"/"optimization.csv";out.to_csv(path,index=False);console.print(f"Wrote {len(out)} development-only combinations")
+
+@app.command("ablation")
+def ablation_command():
+    cfg=settings();_require_ready();start,end=cfg["research"]["development"];out=run_ablation(_data(),cfg,start,end,_status());out.to_csv(ROOT/"reports"/"research"/"ablation.csv",index=False);console.print(out.to_string(index=False))
 
 @app.command("walk-forward")
 def walk_forward_command(start:str="2019-01-01",end:str|None=None):
-    ready=research_readiness(ROOT)
-    if not ready.passed.all():raise typer.BadParameter("Research data incomplete")
-    out=walk_forward(_data(),settings(),start,end,_status(),_feature_cache());out.to_csv(ROOT/"reports"/"walk_forward.csv",index=False);console.print(f"Wrote {len(out)} walk-forward windows")
+    cfg=settings();_require_ready();out=walk_forward(_data(),cfg,start,end or cfg["research"]["validation"][1],_status());out.to_csv(ROOT/"reports"/"walk_forward"/"folds.csv",index=False);console.print(f"Wrote {len(out)} walk-forward windows")
+
+@app.command("final-oos")
+def final_oos():
+    cfg=settings();ready=_require_ready();lock=ROOT/"config"/"final_oos_lock.json"
+    if lock.exists() and json.loads(lock.read_text(encoding="utf-8")).get("executed"):raise typer.BadParameter("FINAL_OOS_LOCKED_ALREADY_EXECUTED")
+    opt=ROOT/"reports"/"development"/"optimization.csv"
+    if not opt.exists():raise typer.BadParameter("RUN_DEVELOPMENT_OPTIMIZATION_FIRST")
+    best=pd.read_csv(opt).replace([float("inf"),float("-inf")],pd.NA).dropna(subset=["RobustScore"]).iloc[0];selected={"TP":best.TP,"LowPosition":best.LowPosition,"MRProbability":best.MRProbability};payload={"selected_parameters":selected,"data_version":ready.dataset_version,"dataset_hash":ready.dataset_hash,"config_hash":config_hash(cfg),"git_commit":git_commit(ROOT),"lock_timestamp":pd.Timestamp.now(tz="Asia/Taipei").isoformat(),"executed":False};lock.write_text(json.dumps(payload,indent=2),encoding="utf-8")
+    import copy;c=copy.deepcopy(cfg);c["strategy"]["low_zone"]["max_price_position"]=best.LowPosition;c["strategy"]["mean_reversion"]["minimum_probability"]=best.MRProbability;start,end=c["research"]["final_oos"];data=_data();status=_status();results={}
+    for scenario in ("OPTIMISTIC","BASE","CONSERVATIVE"):
+        r=BacktestEngine(data,c,status=status).run(start,end,best.TP,True,scenario,False);results[scenario]=r;write_csvs(r,ROOT/"reports"/"final_oos"/scenario.lower())
+    base=results["BASE"];boot=bootstrap_trades(base["trades"]);mc=monte_carlo(base["trades"]);boot.to_csv(ROOT/"reports"/"final_oos"/"bootstrap.csv",index=False);mc.to_csv(ROOT/"reports"/"final_oos"/"monte_carlo.csv",index=False);write_html(base,ROOT/"reports"/"final_oos"/"backtest.html");write_manifest(ROOT/"reports"/"final_oos"/"run_manifest.json",ready,c,[start,end],"NEXT_DAY_OPEN", "final_oos");payload["executed"]=True;lock.write_text(json.dumps(payload,indent=2),encoding="utf-8");console.print("Final OOS executed once and locked")
 
 @app.command()
 def report():
+    p=ROOT/"reports"/"final_oos"/"base"
+    if not p.exists():raise typer.BadParameter("NO_FINAL_OOS_RESULT")
     from trader.backtest.metrics import metrics
     from trader.backtest.benchmarks import benchmark_comparison
-    p=ROOT/"reports";eq=pd.read_csv(p/"equity_curve.csv",parse_dates=["date"]);tr=pd.read_csv(p/"trades.csv");old=pd.read_csv(p/"metrics.csv").iloc[0].to_dict();m=metrics(eq,tr,float(old["Starting Capital"]));pd.DataFrame([m]).to_csv(p/"metrics.csv",index=False);sig=pd.read_csv(p/"signals.csv");sens=pd.read_csv(p/"sensitivity.csv") if (p/"sensitivity.csv").exists() else None
-    wf=pd.read_csv(p/"walk_forward.csv") if (p/"walk_forward.csv").exists() else None;bench=benchmark_comparison(_data(),eq.date.min(),eq.date.max());bench.to_csv(p/"benchmarks.csv",index=False)
-    write_html({"equity":eq,"trades":tr,"signals":sig,"metrics":m},p/"backtest.html",sens,bench,wf);console.print(p/"backtest.html")
+    eq=pd.read_csv(p/"equity_curve.csv",parse_dates=["date"]);tr=pd.read_csv(p/"trades.csv");m=metrics(eq,tr,float(settings()["backtest"]["initial_capital_twd"]));sig=pd.read_csv(p/"signals.csv");bench=benchmark_comparison(_data(),eq.date.min(),eq.date.max());bench.to_csv(ROOT/"reports"/"final_oos"/"benchmarks.csv",index=False);write_html({"equity":eq,"trades":tr,"signals":sig,"metrics":m},ROOT/"reports"/"final_oos"/"backtest.html",benchmarks=bench);console.print(ROOT/"reports"/"final_oos"/"backtest.html")
 
 @app.command()
 def paper():

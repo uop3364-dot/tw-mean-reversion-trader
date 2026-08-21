@@ -18,7 +18,8 @@ strategy:
     lookback_days: 60
     atr_period: 14
     minimum_atr_pct: 0.025
-    ideal_atr_pct: 0.04
+    ideal_atr_low_pct: 0.04
+    ideal_atr_high_pct: 0.06
     maximum_atr_pct: 0.12
     zigzag_threshold: 0.05
     minimum_swings: 4
@@ -41,12 +42,16 @@ strategy:
     target_return: 0.10
     horizon_days: 40
     minimum_probability: 0.65
-    minimum_historical_events: 12
+    minimum_historical_events: 20
     event_cooldown_days: 10
+    beta_prior_alpha: 5
+    beta_prior_beta: 5
+    dynamic_tp_minimum_trades: 30
   regime:
     maximum_buy_risk_score: 40
-    thesis_break_score: 80
-    thesis_break_confirmation_days: 3
+    thesis_break_score: 75
+    thesis_break_immediate_score: 90
+    thesis_break_confirmation_days: 2
   ranking:
     minimum_final_score: 70
   portfolio:
@@ -56,12 +61,17 @@ strategy:
     cash_reserve_ratio: 0.10
     max_new_positions_per_day: 3
   execution:
+    model: NEXT_DAY_OPEN
     next_day_execution: true
     buy_window_start: "09:15"
     buy_window_end: "09:30"
     max_buy_price_deviation: 0.003
     buy_slippage: 0.001
     sell_slippage: 0.001
+    scenarios:
+      OPTIMISTIC: {buy_slippage: 0.0005, sell_slippage: 0.0005, touch_adverse: 0.0, volume_fraction: 0.10}
+      BASE: {buy_slippage: 0.001, sell_slippage: 0.001, touch_adverse: 0.0, volume_fraction: 0.05}
+      CONSERVATIVE: {buy_slippage: 0.002, sell_slippage: 0.003, touch_adverse: 0.0015, volume_fraction: 0.02}
   take_profit:
     dynamic: true
     fallback: 0.10
@@ -86,6 +96,15 @@ backtest:
   initial_capital_twd: 100000
   start_date: "2019-01-01"
   seed: 42
+research:
+  dataset_version: "tw_equity_daily_v2_20260821"
+  warmup: ["2018-01-01", "2018-12-31"]
+  development: ["2019-01-01", "2021-12-31"]
+  validation: ["2022-01-01", "2023-12-31"]
+  final_oos: ["2024-01-01", null]
+  minimum_training_trades: 50
+  minimum_test_fold_trades: 30
+  preferred_formal_trades: 300
 data:
   start_date: "2018-01-01"
   universe_source: "TWSE_TPEx_OFFICIAL"

@@ -1,0 +1,77 @@
+{
+  "dataset_version": "tw_equity_daily_v2_20260821",
+  "dataset_hash": "e9b2b45d21fa380a09576b2f9e922aefc7b1307ed707bcfe90794df93f8eff1d",
+  "passed": false,
+  "checks": [
+    {
+      "check": "point_in_time_universe",
+      "passed": false,
+      "actual": "['data_status', 'exchange', 'first_seen', 'last_seen', 'source', 'symbol', 'trading_days', 'universe_reason']",
+      "required": "['delisting_date', 'exchange', 'instrument_type', 'listing_date', 'symbol']",
+      "reason": "authoritative listing/delisting/type for every security"
+    },
+    {
+      "check": "ordinary_stock_identity",
+      "passed": false,
+      "actual": "missing",
+      "required": "TWSE/TPEx ordinary stock only",
+      "reason": "product identity must be point-in-time"
+    },
+    {
+      "check": "delisted_coverage",
+      "passed": false,
+      "actual": "125 delisted",
+      "required": "all delisted",
+      "reason": "prevent survivorship bias"
+    },
+    {
+      "check": "trading_calendar",
+      "passed": true,
+      "actual": "2095",
+      "required": "unique ordered sessions",
+      "reason": "single timing source"
+    },
+    {
+      "check": "point_in_time_status",
+      "passed": true,
+      "actual": "{'TWSE': 0, 'TPEx': 0}",
+      "required": "zero missing sessions",
+      "reason": "tradability state per exchange session"
+    },
+    {
+      "check": "ohlcv_provenance",
+      "passed": false,
+      "actual": "0/2061",
+      "required": "every symbol/range",
+      "reason": "secondary data cannot be unmarked"
+    },
+    {
+      "check": "price_convention",
+      "passed": false,
+      "actual": "set()",
+      "required": "UNADJUSTED_EXCHANGE",
+      "reason": "no adjusted/unadjusted mix"
+    },
+    {
+      "check": "corporate_actions",
+      "passed": false,
+      "actual": "rows=0",
+      "required": "complete verified ledger",
+      "reason": "auditable adjustment layer"
+    },
+    {
+      "check": "large_return_audit",
+      "passed": false,
+      "actual": "rows=264",
+      "required": "all >25% moves verified",
+      "reason": "corporate action/data error audit"
+    },
+    {
+      "check": "ohlcv_hard_checks",
+      "passed": false,
+      "actual": "{'invalid': 0, 'duplicates': 0, 'off_calendar': 1279}",
+      "required": "all zero",
+      "reason": "bar and calendar invariants"
+    }
+  ]
+}

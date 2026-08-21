@@ -1,41 +1,39 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from trader.indicators import atr,rsi,bollinger,efficiency_ratio,direction_changes,zigzag_count
+from trader.indicators import atr,rsi,bollinger,efficiency_ratio,direction_changes
+from trader.indicators.swings import rolling_swing_features
 
-def _clip_score(x, lo, hi, inverse=False):
-    z=((x-lo)/(hi-lo)*100).clip(0,100)
-    return 100-z if inverse else z
+def triangular_score(x,left,ideal_low,ideal_high,right):
+    x=pd.Series(x);up=((x-left)/(ideal_low-left)*100).clip(0,100);down=((right-x)/(right-ideal_high)*100).clip(0,100)
+    return pd.Series(np.where(x<ideal_low,up,np.where(x<=ideal_high,100,down)),index=x.index).where((x>left)&(x<right),0.)
 
-def add_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    d=df.sort_values("date").copy(); o=cfg["strategy"]["oscillation"]; l=cfg["strategy"]["low_zone"]
-    d["atr_pct"]=atr(d,o["atr_period"])/d.close
-    d["swings"]=zigzag_count(d.close,o["zigzag_threshold"],o["lookback_days"])
-    d["direction_changes"]=direction_changes(d.close,o["lookback_days"])
-    d["er60"]=efficiency_ratio(d.close,o["efficiency_ratio_period"])
-    atr_score=_clip_score(d.atr_pct,o["minimum_atr_pct"],o["ideal_atr_pct"])
-    swing_score=_clip_score(d.swings,0,max(o["minimum_swings"],1))
-    dir_score=_clip_score(d.direction_changes,0,max(o["minimum_direction_changes"],1))
-    eff_score=_clip_score(d.er60,0,o["maximum_efficiency_ratio"],inverse=True)
-    d["oscillation_score"]=.25*atr_score+.30*swing_score+.20*dir_score+.25*eff_score
-    n=l["lookback_days"]; low=d.close.rolling(n).min(); high=d.close.rolling(n).max()
-    d["price_position"]=(d.close-low)/(high-low).replace(0,np.nan)
-    d["price_percentile"]=d.close.rolling(n).rank(pct=True)
-    d["rsi14"]=rsi(d.close,l["rsi_period"]); bb=bollinger(d.close,l["bollinger_period"],l["bollinger_std"])
-    d["bb_position"]=(d.close-bb.lower)/(bb.upper-bb.lower).replace(0,np.nan)
-    pp=(100*(1-d.price_position/l["max_price_position"])).clip(0,100)
-    pct=(100*(1-d.price_percentile/l["max_price_percentile"])).clip(0,100)
-    rs=(100*(l["rsi_maximum"]-d.rsi14)/(l["rsi_maximum"]-l["rsi_minimum"])).clip(0,100)
-    bs=(100*(1-d.bb_position/l["bollinger_max_position"])).clip(0,100)
-    d["low_score"]=.40*pp+.25*pct+.20*rs+.15*bs
-    d["ma20"]=d.close.rolling(20).mean(); d["ma60"]=d.close.rolling(60).mean()
-    slope=d.ma60/d.ma60.shift(20)-1; ret60=d.close/d.close.shift(60)-1
-    cond_a=(d.close<d.ma60)&(d.ma20<d.ma60)&(slope<-.03)
-    newlow=d.low<=d.low.rolling(20).min(); nearlow=d.close<=d.low+.2*(d.high-d.low)
-    cond_b=newlow&(d.volume>d.volume.rolling(20).mean()*2)&nearlow
-    cond_c=(d.er60>.50)&(ret60<-.15)
-    lower_lows=(d.low.diff()<0).rolling(20).sum()>=3; lower_highs=(d.high.diff()<0).rolling(20).sum()>=3
-    cond_d=lower_lows&lower_highs
-    d["regime_risk_score"]=(cond_a*30+cond_b*35+cond_c*35+cond_d*20).clip(0,100).astype(float)
-    d["avg_volume_20"]=d.volume.rolling(20).mean();d["avg_value_20"]=(d.close*d.volume).rolling(20).mean()
-    return d
+def add_features(df:pd.DataFrame,cfg:dict,market:pd.DataFrame|None=None)->pd.DataFrame:
+    d=df.sort_values("date").copy();o=cfg["strategy"]["oscillation"];l=cfg["strategy"]["low_zone"]
+    d["atr_pct"]=atr(d,o["atr_period"])/d.close;sw=rolling_swing_features(d.close,o["zigzag_threshold"],o["lookback_days"]);d=d.join(sw)
+    d["swings"]=d.effective_swing_count;d["direction_changes"]=direction_changes(d.close,o["lookback_days"])
+    for n in (20,40,60):d[f"er{n}"]=efficiency_ratio(d.close,n)
+    atr_score=triangular_score(d.atr_pct,o["minimum_atr_pct"],o["ideal_atr_low_pct"],o["ideal_atr_high_pct"],o["maximum_atr_pct"])
+    swing_score=(d.effective_swing_count/o["minimum_swings"]*100).clip(0,100);dir_score=(d.direction_changes/o["minimum_direction_changes"]*100).clip(0,100);eff_score=(100*(1-(.2*d.er20+.3*d.er40+.5*d.er60)/o["maximum_efficiency_ratio"])).clip(0,100)
+    ma20=d.close.rolling(20).mean();cross=np.sign(d.close-ma20).replace(0,np.nan).ffill().ne(np.sign(d.close-ma20).replace(0,np.nan).ffill().shift()).rolling(60).sum();cross_score=(cross/8*100).clip(0,100)
+    roll_low=d.close.rolling(60).min();roll_high=d.close.rolling(60).max();width=(roll_high-roll_low)/d.close;drift=(d.close-d.close.shift(60)).abs()/(roll_high-roll_low).replace(0,np.nan);range_persistence=(100*(1-drift)).clip(0,100).where(width>.08,0)
+    d["ma20_crossing_count"]=cross;d["range_persistence_score"]=range_persistence.fillna(0)
+    consistency=(d.swing_amplitude_consistency*100).clip(0,100)
+    d["oscillation_score"]=(.18*atr_score+.22*swing_score+.15*dir_score+.18*eff_score+.12*d.range_persistence_score+.08*cross_score+.07*consistency)
+    n=l["lookback_days"];lo=d.close.rolling(n).min();hi=d.close.rolling(n).max();d["price_position"]=(d.close-lo)/(hi-lo).replace(0,np.nan);d["price_percentile"]=d.close.rolling(n).rank(pct=True);d["rsi14"]=rsi(d.close,l["rsi_period"]);bb=bollinger(d.close,l["bollinger_period"],l["bollinger_std"]);d["bb_position"]=(d.close-bb.lower)/(bb.upper-bb.lower).replace(0,np.nan)
+    pp=triangular_score(d.price_position,0,.05,.20,.35);pct=triangular_score(d.price_percentile,0,.05,.25,.40);rs=triangular_score(d.rsi14,15,25,40,50);bs=triangular_score(d.bb_position,-.6,-.2,.25,.45)
+    d["extreme_crash_penalty"]=(100-triangular_score(d.price_position,-.01,.04,1,2)).clip(0,100)*.35+(100-triangular_score(d.rsi14,10,22,100,200)).clip(0,100)*.25
+    d["low_score"]=(.40*pp+.25*pct+.20*rs+.15*bs-d.extreme_crash_penalty).clip(0,100)
+    d["ma20"]=ma20;d["ma60"]=d.close.rolling(60).mean();d["ma120"]=d.close.rolling(120).mean()
+    for n in (20,60):d[f"return{n}"]=d.close.pct_change(n);d[f"ma{n}_slope20"]=d[f"ma{n}"]/d[f"ma{n}"].shift(20)-1
+    volavg=d.volume.rolling(20).mean();daily_range=(d.high-d.low)/d.close;gap=(d.open/d.close.shift()-1);new20=d.low<=d.low.rolling(20).min();new60=d.low<=d.low.rolling(60).min();near_low=(d.close-d.low)/(d.high-d.low).replace(0,np.nan)<.2;range_expand=daily_range>daily_range.rolling(60).median()*2
+    d["abnormal_breakdown_score"]=(new20*15+new60*20+(d.volume>2*volavg)*20+near_low*15+(gap<-.04)*15+range_expand*15).astype(float)
+    d["atr_regime_shift"]=d.atr_pct/d.atr_pct.rolling(60).median();d["rolling_drawdown60"]=d.close/d.close.rolling(60).max()-1
+    if market is not None and not market.empty:
+        m=market.copy();m["date"]=pd.to_datetime(m.date);mc=m.set_index("date").close.reindex(pd.to_datetime(d.date)).reset_index(drop=True)
+        d["rs20"]=d.return20-mc.pct_change(20);d["rs60"]=d.return60-mc.pct_change(60)
+    else:d["rs20"]=0.;d["rs60"]=0.
+    bearish=(d.structure_direction=="BEARISH").astype(float);ma_risk=((d.close<d.ma60)&(d.ma20<d.ma60)).astype(float);trend_er=((d.er60-.35)/.35*100).clip(0,100);weak=(-d.rs60/.25*100).clip(0,100);atrshift=((d.atr_regime_shift-1)/1.5*100).clip(0,100);dd=(-d.rolling_drawdown60/.35*100).clip(0,100)
+    d["regime_risk_score"]=(.20*d.abnormal_breakdown_score+.18*bearish*100+.15*ma_risk*100+.12*trend_er+.12*weak+.10*atrshift+.13*dd).clip(0,100).fillna(0)
+    d["thesis_break_score"]=(.30*d.regime_risk_score+.20*bearish*100+.20*weak+.15*d.abnormal_breakdown_score+.15*atrshift).clip(0,100).fillna(0)
+    d["avg_volume_20"]=volavg;d["avg_value_20"]=(d.close*d.volume).rolling(20).mean();return d

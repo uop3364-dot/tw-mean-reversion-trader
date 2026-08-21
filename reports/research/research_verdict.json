@@ -1,0 +1,42 @@
+{
+  "run_timestamp": "2026-08-21T00:00:00+08:00",
+  "verdict": "INVALID_DATA",
+  "formal_research_executed": false,
+  "dataset": {
+    "version": "tw_equity_daily_v2_20260821",
+    "files": 2088,
+    "symbol_days": 3755811,
+    "date_range": ["2018-01-02", "2026-08-20"],
+    "historical_catalog_symbols": 2087,
+    "delisted_records": 125
+  },
+  "blocking_checks": [
+    "point_in_time_universe",
+    "ordinary_stock_identity",
+    "delisted_coverage",
+    "ohlcv_provenance",
+    "price_convention",
+    "corporate_actions",
+    "large_return_audit",
+    "ohlcv_hard_checks"
+  ],
+  "formal_results": {
+    "development": "NOT_RUN",
+    "validation": "NOT_RUN",
+    "ablation": "NOT_RUN",
+    "walk_forward": "NOT_RUN",
+    "final_oos": "NOT_RUN",
+    "bootstrap": "NOT_RUN",
+    "monte_carlo": "NOT_RUN"
+  },
+  "research_questions": {
+    "Q1": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q2": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q3": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q4": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q5": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q6": "NOT_TESTABLE_WITH_CURRENT_DATA",
+    "Q7": "NOT_TESTABLE_WITH_CURRENT_DATA"
+  },
+  "note": "No legacy performance result was reused. Formal OOS remains untouched and no final_oos_lock.json was created."
+}

@@ -1,38 +1,50 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from pathlib import Path
+import hashlib,json
 import pandas as pd
 
-def research_readiness(root:Path):
-    data=root/"data";reports=root/"reports";checks=[]
-    def add(name,ok,actual,required,reason):checks.append({"check":name,"passed":bool(ok),"actual":actual,"required":required,"reason":reason})
-    up=data/"universe.parquet";u=pd.read_parquet(up) if up.exists() else pd.DataFrame();add("current_universe",len(u)>=1900,len(u),">=1900","Cover current TWSE/TPEx ordinary-stock issuers")
-    hp=data/"historical_universe.parquet";h=pd.read_parquet(hp) if hp.exists() else pd.DataFrame();add("historical_universe",len(h)>=2000,len(h),">=2000 with explicit exclusions","Current plus official delisting masters prevent a current-constituent-only study")
-    qp=reports/"data_quality.csv";q=pd.read_csv(qp) if qp.exists() else pd.DataFrame()
-    complete=not q.empty and (~q.downloaded.astype(bool)).sum()==0 and q.invalid_ohlcv_rows.sum()==0
-    add("current_ohlcv_quality",complete,f"missing={0 if q.empty else (~q.downloaded.astype(bool)).sum()}, invalid={0 if q.empty else q.invalid_ohlcv_rows.sum()}","missing=0, invalid=0","All current ordinary stocks have validated bars; <120 days are rule-based exclusions")
-    taiex=data/"processed"/"TAIEX.parquet";calendar=pd.read_parquet(taiex).date if taiex.exists() else pd.Series(dtype="datetime64[ns]")
-    expected={pd.Timestamp(x) for x in calendar[calendar>=pd.Timestamp("2018-01-01")]}
+class ResearchDataNotReady(RuntimeError): pass
+
+@dataclass(frozen=True)
+class ResearchReadinessResult:
+    checks:pd.DataFrame; dataset_version:str; dataset_hash:str
+    @property
+    def passed(self): return bool(not self.checks.empty and self.checks.passed.all())
+    def require(self):
+        if not self.passed: raise ResearchDataNotReady("RESEARCH_DATA_NOT_READY:"+",".join(self.checks.loc[~self.checks.passed,"check"]))
+        return self
+
+def _hash(paths,extra=b""):
+    h=hashlib.sha256(extra)
+    for p in sorted(set(Path(x) for x in paths),key=lambda x:x.as_posix()):
+        h.update(p.as_posix().encode())
+        with p.open("rb") as f:
+            for block in iter(lambda:f.read(1048576),b""):h.update(block)
+    return h.hexdigest()
+
+def research_readiness(root:Path,cfg=None):
+    from trader.config import settings
+    cfg=cfg or settings();data=root/"data";out=root/"reports"/"data_audit";out.mkdir(parents=True,exist_ok=True);checks=[]
+    def add(name,ok,actual,required,reason):checks.append({"check":name,"passed":bool(ok),"actual":str(actual),"required":str(required),"reason":reason})
+    hp=data/"historical_universe.parquet";hist=pd.read_parquet(hp) if hp.exists() else pd.DataFrame();required={"symbol","exchange","listing_date","delisting_date","instrument_type"}
+    pit=required<=set(hist.columns) and hist.listing_date.notna().all();add("point_in_time_universe",pit,sorted(hist.columns),sorted(required),"authoritative listing/delisting/type for every security")
+    ordinary=not hist.empty and "instrument_type" in hist and hist.instrument_type.isin(["stock","ordinary_stock","common_stock"]).all();add("ordinary_stock_identity",ordinary,"verified" if ordinary else "missing","TWSE/TPEx ordinary stock only","product identity must be point-in-time")
+    dp=data/"delisted_universe.parquet";dl=pd.read_parquet(dp) if dp.exists() else pd.DataFrame();covered=not dl.empty and not hist.empty and set(dl.symbol.astype(str))<=set(hist.symbol.astype(str));add("delisted_coverage",covered,f"{len(dl)} delisted", "all delisted", "prevent survivorship bias")
+    tp=data/"processed"/"TAIEX.parquet";cal=pd.read_parquet(tp).date if tp.exists() else pd.Series(dtype="datetime64[ns]");idx=pd.DatetimeIndex(cal);add("trading_calendar",len(idx)>0 and idx.is_unique and idx.is_monotonic_increasing,len(idx),"unique ordered sessions","single timing source")
+    expected=set(pd.to_datetime(cal[cal>=pd.Timestamp("2019-01-01")]));missing={}
     for ex in ("TWSE","TPEx"):
-        parts=list((data/"official_daily").glob(f"{ex}_*.parquet"));seen=set()
-        for p in parts:
-            try:seen|={pd.Timestamp(x) for x in pd.read_parquet(p,columns=["date"]).date.unique()}
-            except Exception:pass
-        if ex=="TPEx":add(f"official_ohlcv_{ex}",expected<=seen,len(expected-seen),"0 missing dates",f"Official {ex} OHLCV and historical membership")
-        else:
-            mixed=not h.empty and len(h[(h.exchange=="TWSE")&(h.data_status=="READY")])>=1100
-            add("validated_ohlcv_TWSE",mixed,len(h[(h.exchange=="TWSE")&(h.data_status=="READY")]) if not h.empty else 0,">=1100 ready histories","Validated mixed-source TWSE bars with symbol-level provenance; official whole-market partitions remain a cross-check")
-    disposition_parts=[data/f"dispositions_{ex}.parquet" for ex in ("TWSE","TPEx")]
-    disposition_audits=[data/f"disposition_query_audit_{ex}.parquet" for ex in ("TWSE","TPEx")]
-    disp_ok=all(p.exists() for p in disposition_parts+disposition_audits)
-    add("disposition_history",disp_ok,sum(pd.read_parquet(p).shape[0] for p in disposition_parts if p.exists()),"both exchanges with successful range-query audit","Exclude disposition periods point-in-time; file existence alone is insufficient")
-    status_missing={}
-    expected_status={pd.Timestamp(x) for x in calendar[calendar>=pd.Timestamp("2019-01-01")]}
-    for ex in ("TWSE","TPEx"):
-        ap=data/f"status_query_audit_{ex}.parquet";successful=set()
-        if ap.exists():
-            audit=pd.read_parquet(ap);successful={pd.Timestamp(x) for x in audit.loc[audit.success,"date"]}
-        status_missing[ex]=len(expected_status-successful)
-    status_ok=all(v==0 for v in status_missing.values())
-    add("altered_suspended_history",status_ok,str(status_missing),"0 unaudited dates for both exchanges","Every query date must explicitly succeed; empty event tables are not treated as successful queries")
-    add("benchmarks",taiex.exists() and (data/"processed"/"0050.parquet").exists(),"TAIEX+0050","TAIEX+0050","Benchmark comparison")
-    out=pd.DataFrame(checks);out.to_csv(reports/"research_readiness.csv",index=False);return out
+        p=data/f"status_query_audit_{ex}.parquet";success=set()
+        if p.exists():
+            a=pd.read_parquet(p);success=set(pd.to_datetime(a.loc[a.success,"date"]))
+        missing[ex]=len(expected-success)
+    add("point_in_time_status",all(v==0 for v in missing.values()),missing,"zero missing sessions","tradability state per exchange session")
+    pp=data/"provenance.parquet";prov=pd.read_parquet(pp) if pp.exists() else pd.DataFrame();pc={"symbol","start_date","end_date","source","price_convention","download_timestamp","repair_reason","validation_result"};ready=set(hist.loc[hist.get("data_status",pd.Series(index=hist.index)).eq("READY"),"symbol"].astype(str)) if not hist.empty else set();ps=set(prov.symbol.astype(str)) if pc<=set(prov.columns) else set();add("ohlcv_provenance",pc<=set(prov.columns) and ready<=ps,f"{len(ps)}/{len(ready)}", "every symbol/range","secondary data cannot be unmarked")
+    conv=set(prov.price_convention.dropna()) if "price_convention" in prov else set();add("price_convention",conv=={"UNADJUSTED_EXCHANGE"},conv,"UNADJUSTED_EXCHANGE","no adjusted/unadjusted mix")
+    ap=data/"corporate_actions.parquet";actions=pd.read_parquet(ap) if ap.exists() else pd.DataFrame();ac={"symbol","date","event_type","adjustment_factor","source","verified"};complete=ac<=set(actions.columns) and not actions.empty and actions.verified.astype(bool).all();add("corporate_actions",complete,f"rows={len(actions)}","complete verified ledger","auditable adjustment layer")
+    lap=out/"corporate_action_audit.csv";large=pd.read_csv(lap) if lap.exists() else pd.DataFrame();largeok=not large.empty and "verified" in large and large.verified.astype(bool).all();add("large_return_audit",largeok,f"rows={len(large)}","all >25% moves verified","corporate action/data error audit")
+    invalid=duplicates=offcal=0
+    for p in (data/"processed").glob("*.parquet"):
+        d=pd.read_parquet(p);d["date"]=pd.to_datetime(d.date);bad=(d[["open","high","low","close"]]<=0).any(axis=1)|(d.volume<0)|(d.high<d.low)|(d.high<d[["open","close"]].max(axis=1))|(d.low>d[["open","close"]].min(axis=1));invalid+=int(bad.sum());duplicates+=int(d.date.duplicated().sum());offcal+=int((~d.date.isin(cal)).sum()) if len(cal) else len(d)
+    add("ohlcv_hard_checks",invalid==duplicates==offcal==0,{"invalid":invalid,"duplicates":duplicates,"off_calendar":offcal},"all zero","bar and calendar invariants")
+    version=cfg.get("research",{}).get("dataset_version","UNVERSIONED");paths=[p for p in [hp,dp,pp,ap,tp,root/"config"/"strategy.yaml"] if p.exists()]+list((data/"processed").glob("*.parquet"))+list(data.glob("*status*.parquet"))+list(data.glob("dispositions*.parquet"));dh=_hash(paths,json.dumps(cfg,sort_keys=True,default=str).encode());frame=pd.DataFrame(checks);frame.to_csv(out/"research_readiness.csv",index=False);(out/"readiness.json").write_text(json.dumps({"dataset_version":version,"dataset_hash":dh,"passed":bool(frame.passed.all()),"checks":frame.to_dict("records")},indent=2),encoding="utf-8");return ResearchReadinessResult(frame,version,dh)
