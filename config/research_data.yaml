@@ -1,0 +1,36 @@
+datasets:
+  current_universe:
+    source: TWSE t187ap03_L and TPEx mopsfin_t187ap03_O
+    purpose: Identify current ordinary-stock issuers and listing dates; company lists exclude ETFs, ETNs and warrants by construction.
+    point_in_time: false
+    required: true
+  historical_universe:
+    source: TWSE MI_INDEX and TPEx STK_WN1430 daily observed four-digit symbols
+    purpose: Reconstruct securities actually present on each historical date and avoid current-constituent survivorship bias.
+    point_in_time: true
+    required: true
+  ohlcv:
+    source: TWSE MI_INDEX, TPEx STK_WN1430; FinMind targeted repair with Yahoo bootstrap provenance
+    purpose: Unadjusted daily execution and indicator inputs; source is recorded per symbol and OHLC/calendar invariants are validated before use.
+    point_in_time: true
+    required: true
+  disposition_periods:
+    source: TWSE announcement/punish and TPEx bulletin/disposal
+    purpose: Reject buys during official disposition periods.
+    point_in_time: true
+    required: true
+  altered_and_suspended:
+    source: TWSE TWT85U and TPEx afterTrading/chtm
+    purpose: Reject full-cash-delivery, altered-trading and suspended securities on the applicable date.
+    point_in_time: true
+    required: true
+  taiex:
+    source: TWSE/Yahoo cross-check
+    purpose: Market crash regime and benchmark.
+    point_in_time: true
+    required: true
+  0050:
+    source: Official/Yahoo cross-check
+    purpose: Investable benchmark only; explicitly excluded from strategy universe.
+    point_in_time: true
+    required: true

@@ -1,0 +1,27 @@
+symbol,exchange,first_seen,last_seen,trading_days,source,universe_reason,data_status
+1780,TPEx,2026-06-17,2026-08-19,44,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+3068,TPEx,2018-01-02,2018-06-06,100,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+3485,TPEx,2026-05-06,2026-08-19,74,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+4965,TPEx,2018-01-02,2018-06-21,107,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+6028,TPEx,2026-03-30,2026-08-19,97,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+6554,TPEx,2018-01-02,2018-05-23,91,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+6945,TPEx,2026-06-05,2026-08-19,52,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+6983,TPEx,2026-05-25,2026-08-19,61,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+6986,TPEx,2026-06-26,2026-08-19,38,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7772,TPEx,2026-05-08,2026-08-19,72,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7794,TPEx,2026-04-20,2026-08-19,84,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7811,TPEx,2026-03-25,2026-08-19,101,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7814,TPEx,2026-07-16,2026-08-19,25,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7819,TPEx,2026-05-27,2026-08-19,59,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7820,TPEx,2026-04-27,2026-08-19,80,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7828,TPEx,2026-04-22,2026-08-19,83,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7839,TPEx,2026-06-15,2026-08-19,46,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+7842,TPEx,2026-05-11,2026-08-19,70,TPEx STK_WN1430,observed in official daily market table,EXCLUDE_INSUFFICIENT_HISTORY
+1469,TWSE,2018-01-03,2018-07-10,98,FinMind TaiwanStockPrice,current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+1729,TWSE,,,0,"Yahoo bootstrap, OHLC/calendar validated",current TWSE issuer or official TWSE delisting record,EXCLUDE_NO_OVERLAPPING_PRICE_HISTORY
+2072,TWSE,2026-03-26,2026-08-20,100,FinMind TaiwanStockPrice,current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+2311,TWSE,2018-01-02,2018-04-17,67,FinMind TaiwanStockPrice,current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+2325,TWSE,2018-01-02,2018-04-17,67,FinMind TaiwanStockPrice,current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+7803,TWSE,2026-05-20,2026-08-19,65,"Yahoo bootstrap, OHLC/calendar validated",current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+7827,TWSE,2026-05-29,2026-08-20,58,FinMind TaiwanStockPrice,current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY
+7835,TWSE,2026-07-24,2026-08-19,19,"Yahoo bootstrap, OHLC/calendar validated",current TWSE issuer or official TWSE delisting record,EXCLUDE_INSUFFICIENT_HISTORY

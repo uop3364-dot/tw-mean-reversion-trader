@@ -1,0 +1,9 @@
+check,passed,actual,required,reason
+current_universe,True,1979,>=1900,Cover current TWSE/TPEx ordinary-stock issuers
+historical_universe,True,2087,>=2000 with explicit exclusions,Current plus official delisting masters prevent a current-constituent-only study
+current_ohlcv_quality,True,"missing=0, invalid=0","missing=0, invalid=0",All current ordinary stocks have validated bars; <120 days are rule-based exclusions
+validated_ohlcv_TWSE,True,1135,>=1100 ready histories,Validated mixed-source TWSE bars with symbol-level provenance; official whole-market partitions remain a cross-check
+official_ohlcv_TPEx,True,0,0 missing dates,Official TPEx OHLCV and historical membership
+disposition_history,True,3117,both exchanges with successful range-query audit,Exclude disposition periods point-in-time; file existence alone is insufficient
+altered_suspended_history,True,"{'TWSE': 0, 'TPEx': 0}",0 unaudited dates for both exchanges,Every query date must explicitly succeed; empty event tables are not treated as successful queries
+benchmarks,True,TAIEX+0050,TAIEX+0050,Benchmark comparison

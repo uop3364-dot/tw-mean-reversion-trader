@@ -1,0 +1,10 @@
+broker_fee:
+  rate: 0.001425
+  discount: 1.0
+  minimum_fee: 20
+  odd_lot_minimum_fee: 1
+cost:
+  stock_transaction_tax: 0.003
+settlement:
+  business_days: 2
+

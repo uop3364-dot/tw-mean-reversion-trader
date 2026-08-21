@@ -1,0 +1,8 @@
+exchange,source,data_status,symbols
+TPEx,TPEx STK_WN1430,EXCLUDE_INSUFFICIENT_HISTORY,18
+TPEx,TPEx STK_WN1430,READY,926
+TWSE,FinMind TaiwanStockPrice,EXCLUDE_INSUFFICIENT_HISTORY,5
+TWSE,FinMind TaiwanStockPrice,READY,77
+TWSE,"Yahoo bootstrap, OHLC/calendar validated",EXCLUDE_INSUFFICIENT_HISTORY,2
+TWSE,"Yahoo bootstrap, OHLC/calendar validated",EXCLUDE_NO_OVERLAPPING_PRICE_HISTORY,1
+TWSE,"Yahoo bootstrap, OHLC/calendar validated",READY,1058

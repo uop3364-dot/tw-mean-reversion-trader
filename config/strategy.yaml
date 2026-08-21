@@ -1,0 +1,93 @@
+strategy:
+  universe:
+    minimum_history_days: 120
+    minimum_price: 10
+    maximum_price: 1000
+    minimum_avg_daily_value_20d: 30000000
+    minimum_avg_daily_volume_shares_20d: 300000
+    exclude_disposition: true
+    exclude_full_cash_delivery: true
+    exclude_suspended: true
+    exclude_new_listing_days: 120
+    exclude_etf: true
+    exclude_etn: true
+    exclude_warrant: true
+    exclude_ky: false
+    max_missing_data_ratio: 0.01
+  oscillation:
+    lookback_days: 60
+    atr_period: 14
+    minimum_atr_pct: 0.025
+    ideal_atr_pct: 0.04
+    maximum_atr_pct: 0.12
+    zigzag_threshold: 0.05
+    minimum_swings: 4
+    minimum_direction_changes: 6
+    efficiency_ratio_period: 60
+    maximum_efficiency_ratio: 0.35
+    minimum_score: 65
+  low_zone:
+    lookback_days: 60
+    max_price_position: 0.25
+    max_price_percentile: 0.25
+    rsi_period: 14
+    rsi_minimum: 20
+    rsi_maximum: 45
+    bollinger_period: 20
+    bollinger_std: 2
+    bollinger_max_position: 0.35
+    minimum_score: 65
+  mean_reversion:
+    target_return: 0.10
+    horizon_days: 40
+    minimum_probability: 0.65
+    minimum_historical_events: 12
+    event_cooldown_days: 10
+  regime:
+    maximum_buy_risk_score: 40
+    thesis_break_score: 80
+    thesis_break_confirmation_days: 3
+  ranking:
+    minimum_final_score: 70
+  portfolio:
+    max_positions: 8
+    max_position_weight: 0.15
+    minimum_position_weight: 0.05
+    cash_reserve_ratio: 0.10
+    max_new_positions_per_day: 3
+  execution:
+    next_day_execution: true
+    buy_window_start: "09:15"
+    buy_window_end: "09:30"
+    max_buy_price_deviation: 0.003
+    buy_slippage: 0.001
+    sell_slippage: 0.001
+  take_profit:
+    dynamic: true
+    fallback: 0.10
+    candidates: [0.05, 0.08, 0.10, 0.12, 0.15, 0.20]
+    minimum: 0.05
+    maximum: 0.20
+    minimum_historical_success_probability: 0.60
+  stop_loss:
+    fixed_percentage_enabled: false
+  holding:
+    max_days: 60
+    extension_days: 30
+    absolute_max_days: 90
+  averaging_down:
+    enabled: false
+  account_risk:
+    daily_equity_drop_pause: 0.08
+    maximum_strategy_drawdown: 0.25
+  market_regime:
+    crash_mode_position_multiplier: 0.50
+backtest:
+  initial_capital_twd: 100000
+  start_date: "2019-01-01"
+  seed: 42
+data:
+  start_date: "2018-01-01"
+  universe_source: "TWSE_TPEx_OFFICIAL"
+  require_point_in_time_universe: true
+  symbols: ["1101", "1216", "1301", "1303", "2002", "2303", "2308", "2317", "2330", "2357", "2382", "2408", "2454", "2603", "2609", "2615", "2801", "2881", "2882", "2886", "2891", "3008", "3034", "3231", "3711", "5871", "6505", "0050"]
